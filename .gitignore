@@ -12,7 +12,9 @@ dist
 dist-electron
 release
 config
+release
 *.local
+
 
 # Editor directories and files
 .vscode/*
