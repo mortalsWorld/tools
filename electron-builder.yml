@@ -1,0 +1,21 @@
+appId: com.devtools.app
+productName: DevTools
+directories:
+  output: release
+files:
+  - "dist/**/*"
+  - "dist-electron/**/*"
+  - "package.json"
+asar: true
+win:
+  target:
+    - nsis
+    - portable
+mac:
+  target:
+    - dmg
+    - zip
+linux:
+  target:
+    - AppImage
+    - deb
