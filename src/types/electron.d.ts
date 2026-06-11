@@ -46,8 +46,10 @@ export interface IElectronAPI {
   getFileIcon: (filePath: string) => Promise<{ base64: string }>;
   // Shortcut resolution
   resolveShortcut: (lnkPath: string) => Promise<{ success: boolean, targetPath: string, isShortcut?: boolean, error?: string }>;
-  // Event listener
+  // Event listeners
   onShortcutTriggered: (callback: (toolId: string) => void) => () => void;
+  onConfigChanged: (callback: () => void) => () => void;
+  onNavigateTo: (callback: (toolId: string) => void) => () => void;
 }
 
 declare global {

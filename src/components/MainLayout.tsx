@@ -40,6 +40,8 @@ const MainLayoutContent: React.FC<{
   const [currentTool, setCurrentTool] = useState<Tool | null>(null);
   const [toolbarOrder, setToolbarOrder] = useState<string[]>([]);
   const [hiddenTools, setHiddenTools] = useState<string[]>([]);
+  const [hiddenCategories, setHiddenCategories] = useState<string[]>([]);
+  const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
   const { token } = theme.useToken();
   
   useEffect(() => {
@@ -76,6 +78,8 @@ const MainLayoutContent: React.FC<{
           if (config) {
             setToolbarOrder(config.toolbarOrder || []);
             setHiddenTools(config.hiddenTools || []);
+            setHiddenCategories(config.hiddenCategories || []);
+            setCategoryOrder(config.categoryOrder || []);
           }
         }
       } catch (error) {
@@ -102,6 +106,15 @@ const MainLayoutContent: React.FC<{
       cleanupFns.push(cleanup);
     }
 
+    // 监听全局快捷键触发事件
+    if ((window as any).electronAPI?.onShortcutTriggered) {
+      const cleanup = (window.electronAPI as any).onShortcutTriggered((toolId: string) => {
+        console.log('[MainLayout] 收到快捷键触发:', toolId);
+        setSelectedKey(toolId);
+      });
+      cleanupFns.push(cleanup);
+    }
+
     return () => {
       cleanupFns.forEach(fn => fn());
     };
@@ -109,11 +122,28 @@ const MainLayoutContent: React.FC<{
 
   const categories = toolRegistry.getCategories();
 
+  // 按分类顺序排序，跳过隐藏的分类
+  const sortedCategories = [...categories].sort((a, b) => {
+    // 跳过 settings 分类
+    if (a.id === 'settings') return 1;
+    if (b.id === 'settings') return -1;
+    
+    const aIndex = categoryOrder.indexOf(a.id);
+    const bIndex = categoryOrder.indexOf(b.id);
+    if (aIndex === -1 && bIndex === -1) return 0;
+    if (aIndex === -1) return 1;
+    if (bIndex === -1) return -1;
+    return aIndex - bIndex;
+  });
+
   const menuItems: any[] = [];
   
-  categories.forEach((category: ToolCategory) => {
+  sortedCategories.forEach((category: ToolCategory) => {
     // 跳过 settings 分类
     if (category.id === 'settings') return;
+    
+    // 跳过隐藏的分类
+    if (hiddenCategories.includes(category.id)) return;
     
     let tools = toolRegistry.getToolsByCategory(category.id);
     

@@ -1,6 +1,6 @@
 {
   "name": "toolbox",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "工具箱 - 通用工具集合",
   "main": "dist-electron/main.js",
   "scripts": {

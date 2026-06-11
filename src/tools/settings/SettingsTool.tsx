@@ -27,7 +27,9 @@ interface AppConfig {
   shortcuts: Record<string, string>
   theme: 'light' | 'dark'
   toolbarOrder: string[]
+  categoryOrder: string[]
   hiddenTools: string[]
+  hiddenCategories: string[]
   favoriteTools: string[]
   backupEnabled: boolean
   backupDir: string
@@ -51,6 +53,7 @@ interface ToolbarCategoryItem {
   categoryName: string
   categoryIcon: React.ReactNode
   tools: ToolbarItem[]
+  visible: boolean
 }
 
 export const SettingsTool: React.FC = () => {
@@ -119,17 +122,35 @@ export const SettingsTool: React.FC = () => {
         setShortcuts(shortcutList)
 
         const hiddenTools = config.hiddenTools || []
+        const hiddenCategories = config.hiddenCategories || []
         const toolbarOrder = config.toolbarOrder || []
+        const categoryOrder = config.categoryOrder || []
         const favoriteTools = config.favoriteTools || []
         
         const categories = toolRegistry.getCategories()
         const toolbarCategoryItems: ToolbarCategoryItem[] = []
         
-        categories.forEach(category => {
+        // 按分类顺序排序
+        const sortedCategories = [...categories].sort((a, b) => {
+          const aIndex = categoryOrder.indexOf(a.id)
+          const bIndex = categoryOrder.indexOf(b.id)
+          // 未设置顺序的排到最后
+          if (aIndex === -1 && bIndex === -1) return 0
+          if (aIndex === -1) return 1
+          if (bIndex === -1) return -1
+          return aIndex - bIndex
+        })
+        
+        sortedCategories.forEach(category => {
           if (category.id === 'settings') return
           
           let tools = toolRegistry.getToolsByCategory(category.id)
           tools = tools.filter(tool => tool.id !== 'settings')
+          
+          // 过滤掉隐藏的分类中的工具
+          if (hiddenCategories.includes(category.id)) {
+            return
+          }
           
           tools.sort((a, b) => {
             const aIndex = toolbarOrder.indexOf(a.id)
@@ -150,7 +171,8 @@ export const SettingsTool: React.FC = () => {
                 toolName: tool.name,
                 visible: !hiddenTools.includes(tool.id),
                 favorite: favoriteTools.includes(tool.id)
-              }))
+              })),
+              visible: !hiddenCategories.includes(category.id)
             })
           }
         })
@@ -439,7 +461,9 @@ export const SettingsTool: React.FC = () => {
         return acc
       }, {} as Record<string, string>),
       toolbarOrder: flattenedItems.map(item => item.toolId),
+      categoryOrder: toolbarItems.map(item => item.categoryId),
       hiddenTools: flattenedItems.filter(item => !item.visible).map(item => item.toolId),
+      hiddenCategories: toolbarItems.filter(item => !item.visible).map(item => item.categoryId),
       favoriteTools: flattenedItems.filter(item => item.favorite).map(item => item.toolId),
       backupEnabled: values.backupEnabled ?? existingConfig?.backupEnabled ?? false,
       backupDir: values.backupDir || existingConfig?.backupDir || '',
@@ -486,7 +510,9 @@ export const SettingsTool: React.FC = () => {
           return acc
         }, {} as Record<string, string>),
         toolbarOrder: flattenedItems.map(item => item.toolId),
+        categoryOrder: toolbarItems.map(item => item.categoryId),
         hiddenTools: flattenedItems.filter(item => !item.visible).map(item => item.toolId),
+        hiddenCategories: toolbarItems.filter(item => !item.visible).map(item => item.categoryId),
         favoriteTools: flattenedItems.filter(item => item.favorite).map(item => item.toolId),
         backupEnabled: values.backupEnabled ?? existingConfig?.backupEnabled ?? false,
         backupDir: values.backupDir || existingConfig?.backupDir || '',
@@ -579,6 +605,36 @@ export const SettingsTool: React.FC = () => {
       }
       return category
     }))
+  }
+
+  // 分类排序
+  const handleCategoryMoveUp = (index: number) => {
+    if (index === 0) return
+    setToolbarItems(prev => {
+      const newItems = [...prev]
+      const temp = newItems[index]
+      newItems[index] = newItems[index - 1]
+      newItems[index - 1] = temp
+      return newItems
+    })
+  }
+
+  const handleCategoryMoveDown = (index: number) => {
+    setToolbarItems(prev => {
+      if (index >= prev.length - 1) return prev
+      const newItems = [...prev]
+      const temp = newItems[index]
+      newItems[index] = newItems[index + 1]
+      newItems[index + 1] = temp
+      return newItems
+    })
+  }
+
+  // 分类显示/隐藏
+  const handleCategoryVisibilityChange = (categoryId: string, visible: boolean) => {
+    setToolbarItems(prev => prev.map(category =>
+      category.categoryId === categoryId ? { ...category, visible } : category
+    ))
   }
 
   const shortcutColumns = [
@@ -885,28 +941,56 @@ export const SettingsTool: React.FC = () => {
             key="toolbar-panel"
             header={
               <Text type="secondary">
-                {toolbarCollapsed ? '点击展开查看工具栏自定义' : '按分类调整工具顺序和可见性'}
+                {toolbarCollapsed ? '点击展开查看工具栏自定义' : '按分类调整分类顺序、工具顺序和可见性'}
               </Text>
             }
           >
-            <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
-              {toolbarItems.map((category) => (
+            {/* 分类和工具详细设置 */}
+            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              {toolbarItems.map((category, categoryIndex) => (
                 <div key={category.categoryId} style={{ marginBottom: 16 }}>
                   <div style={{ 
                     display: 'flex', 
                     alignItems: 'center', 
+                    justifyContent: 'space-between',
                     gap: 8,
-                    padding: '8px 12px',
+                    padding: '10px 12px',
                     background: token.colorBgContainer,
                     borderBottom: `1px solid ${token.colorBorderSecondary}`,
                     fontWeight: 500,
                     color: token.colorTextHeading
                   }}>
-                    {category.categoryIcon}
-                    <span>{category.categoryName}</span>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      ({category.tools.length} 个工具)
-                    </Text>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {category.categoryIcon}
+                      <span>{category.categoryName}</span>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        ({category.tools.length} 个工具)
+                      </Text>
+                    </div>
+                    <Space size="small">
+                      <Button
+                        size="small"
+                        icon={<UpOutlined />}
+                        onClick={() => handleCategoryMoveUp(categoryIndex)}
+                        disabled={categoryIndex === 0}
+                        title="分类上移"
+                      />
+                      <Button
+                        size="small"
+                        icon={<DownOutlined />}
+                        onClick={() => handleCategoryMoveDown(categoryIndex)}
+                        disabled={categoryIndex === toolbarItems.length - 1}
+                        title="分类下移"
+                      />
+                      <Switch
+                        checked={category.visible}
+                        onChange={(checked) => handleCategoryVisibilityChange(category.categoryId, checked)}
+                        checkedChildren={<EyeOutlined />}
+                        unCheckedChildren={<EyeInvisibleOutlined />}
+                        title={category.visible ? '隐藏分类' : '显示分类'}
+                        size="small"
+                      />
+                    </Space>
                   </div>
                   {category.tools.map((item, index) => (
                     <div

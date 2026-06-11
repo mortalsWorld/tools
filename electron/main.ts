@@ -49,7 +49,9 @@ const DEFAULT_APP_CONFIG = {
   backupEnabled: true,
   backupCount: 5,
   toolbarOrder: [],
+  categoryOrder: [],
   hiddenTools: [],
+  hiddenCategories: [],
   backupDir: '',
   backupInterval: 24,
   backupIntervalUnit: 'hours',
@@ -667,31 +669,8 @@ async function saveAppConfig(config: any) {
   }
   
   await saveConfig('app-config.json', appConfig)
-  // 注册工具快捷键和窗口快捷键
+  // 注册工具快捷键和窗口快捷键（registerShortcuts内部会处理窗口快捷键）
   registerShortcuts(appConfig.shortcuts)
-  
-  // 重新注册窗口快捷键
-  const windowShortcut = appConfig.windowShortcut || DEFAULT_APP_CONFIG.windowShortcut
-  if (windowShortcut) {
-    try {
-      // 先注销旧的窗口快捷键
-      globalShortcut.unregister(windowShortcut)
-      // 注册新的窗口快捷键
-      globalShortcut.register(windowShortcut, () => {
-        if (win) {
-          if (win.isVisible()) {
-            win.hide()
-          } else {
-            win.show()
-            win.focus()
-          }
-        }
-      })
-      logger.info(`窗口快捷键更新成功: ${windowShortcut}`)
-    } catch (error) {
-      console.error(`更新窗口快捷键失败:`, error)
-    }
-  }
   
   if (
     oldBackupEnabled !== appConfig.backupEnabled ||
