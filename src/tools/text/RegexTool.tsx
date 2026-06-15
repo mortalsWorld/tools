@@ -142,7 +142,7 @@ export const RegexTool: React.FC = () => {
         title="正则表达式测试"
         style={{ borderRadius: 12, height: '100%', minHeight: '500px' }}
       >
-        <Space direction="vertical" style={{ width: '100%' }} size="large">
+        <Space vertical style={{ width: '100%' }} size="large">
           <div>
             <div style={{ marginBottom: 8, fontWeight: 500 }}>正则表达式</div>
             <Space.Compact style={{ width: '100%' }}>
@@ -158,10 +158,9 @@ export const RegexTool: React.FC = () => {
             </Space.Compact>
             {error && (
               <Alert
-                message={error}
+                description={error}
                 type="error"
                 style={{ marginTop: 8 }}
-                showIcon
               />
             )}
           </div>
@@ -192,9 +191,8 @@ export const RegexTool: React.FC = () => {
 
           {matches.length > 0 && (
             <Alert
-              message={`找到 ${matches.length} 个匹配`}
+              description={`找到 ${matches.length} 个匹配`}
               type="success"
-              showIcon
               icon={<SearchOutlined />}
             />
           )}
@@ -226,9 +224,8 @@ export const RegexTool: React.FC = () => {
                 value={testText}
                 onChange={(e) => setTestText(e.target.value)}
                 placeholder="输入要测试的文本"
-                autoSize={{ minRows: 12, maxRows: 12 }}
                 style={{
-                  height: 'calc(100% - 44px)',
+                  height: '100%',
                   borderRadius: 0,
                   borderBottomLeftRadius: 8,
                   borderBottomRightRadius: 8,

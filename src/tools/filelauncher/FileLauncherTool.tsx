@@ -53,6 +53,10 @@ import {
 const { Text } = Typography;
 const { TreeNode } = TreeSelect;
 
+interface ElectronFile extends File {
+  path?: string;
+}
+
 const DEFAULT_ICONS = [
   '📄', '📁', '📝', '📊', '📈', '📉', '🎨', '🎭',
   '🎬', '🎵', '🎶', '🎸', '🎹', '🎺', '🎻', '🎼',
@@ -291,7 +295,7 @@ const FileLauncherTool: React.FC = () => {
   }, []);
 
   // ========== 特有逻辑：处理外部文件拖拽 ==========
-  const handleDropFiles = useCallback(async (files: File[], targetGroupId: string) => {
+  const handleDropFiles = useCallback(async (files: ElectronFile[], targetGroupId: string) => {
     console.log(`[handleDropFiles] 外部文件拖拽到分组: ${targetGroupId}, 文件数: ${files.length}`);
     
     const resolvedGroupId = targetGroupId === 'all' ? 'default' : targetGroupId;
@@ -349,7 +353,7 @@ const FileLauncherTool: React.FC = () => {
     e.preventDefault();
     setDropTarget(null);
 
-    const files = Array.from(e.dataTransfer.files);
+    const files = Array.from(e.dataTransfer.files) as ElectronFile[];
     if (files.length === 0) {
       message.warning('请拖拽文件或文件夹');
       return;

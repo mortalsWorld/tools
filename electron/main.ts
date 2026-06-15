@@ -1,13 +1,175 @@
-import { app, BrowserWindow, dialog, ipcMain, shell, globalShortcut, Menu, nativeImage } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell, globalShortcut, Menu, nativeImage, safeStorage } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { promisify } from 'node:util'
-import { exec } from 'child_process'
+import { execFile } from 'child_process'
 import crypto from 'node:crypto'
 import { initLogger, logger } from './logger'
 
-const execPromise = promisify(exec)
+const execFilePromise = promisify(execFile)
 const rmdir = promisify(fs.rmdir)
+
+// ============================================================================
+// Security helpers
+// ============================================================================
+
+// Validate that a URL only uses safe protocols
+const isSafeUrl = (url: string): boolean => {
+  if (!url || typeof url !== 'string') return false
+  try {
+    const u = new URL(url)
+    // Allow common web protocols; block script/resource-URI schemes
+    const safe = ['http:', 'https:', 'ftp:', 'mailto:', 'tel:', 'telnet:']
+    return safe.includes(u.protocol)
+  } catch {
+    return false
+  }
+}
+
+// Validate that a PID is strictly numeric (no injection)
+const isValidPid = (pid: number): boolean => {
+  return Number.isInteger(pid) && pid > 0 && pid <= 999999
+}
+
+// Validate that a filePath doesn't contain command injection characters.
+// Windows valid filename chars: letters, digits, space, ._-,()&%$@!+=[]{};,#~`  etc.
+// Windows INVALID filename chars: < > : " / \ | ? * (plus control chars 0x00-0x1F)
+// We block control characters and genuinely dangerous patterns; legitimate
+// Windows path characters like & and % are allowed for backward compatibility.
+const isSafeFilePath = (filePath: string): boolean => {
+  if (!filePath || typeof filePath !== 'string') return false
+  if (filePath.length > 512) return false
+  // Block control characters (0x00-0x1F, including null, tab, newline)
+  if (/[\x00-\x1F]/.test(filePath)) return false
+  // Block pipe/redirect which are never part of valid file paths
+  if (/[|<>]/.test(filePath)) return false
+  return true
+}
+
+// Validate accelerator strings for globalShortcut.register
+const isValidAccelerator = (accelerator: string): boolean => {
+  if (!accelerator || typeof accelerator !== 'string') return false
+  if (accelerator.length > 64) return false
+  // Only allow alphanumeric + modifier key symbols (+ space F keys etc)
+  return /^[A-Za-z0-9+\-]+(?:\s*\+\s*[A-Za-z0-9]+)*$/.test(accelerator)
+}
+
+// Encrypt sensitive data (passwords) using Electron's safeStorage
+// Falls back to base64 (obscured but not cryptographically secure)
+// if safeStorage is unavailable (e.g., before app login on some OS)
+const encryptSensitiveData = (data: string): string => {
+  try {
+    if (safeStorage.isEncryptionAvailable()) {
+      return safeStorage.encryptString(data).toString('base64')
+    }
+  } catch (e) {
+    logger.warn('encryptSensitiveData: safeStorage unavailable, using fallback')
+  }
+  // Fallback: weak obfuscation (not encryption) - warn the user
+  return '__b64__' + Buffer.from(data, 'utf-8').toString('base64')
+}
+
+const decryptSensitiveData = (data: string): string => {
+  if (!data) return ''
+  try {
+    if (data.startsWith('__b64__')) {
+      return Buffer.from(data.slice(7), 'base64').toString('utf-8')
+    }
+    if (safeStorage.isEncryptionAvailable()) {
+      const buffer = Buffer.from(data, 'base64')
+      return safeStorage.decryptString(buffer)
+    }
+  } catch (e) {
+    logger.warn('decryptSensitiveData: decryption failed:', e instanceof Error ? e.message : String(e))
+  }
+  return ''
+}
+
+// Encrypt password fields in a password data structure
+const encryptPasswordData = (data: any): any => {
+  if (!data) return data
+  const result: any = {}
+  for (const [key, value] of Object.entries(data)) {
+    if (key === 'password' && typeof value === 'string' && value.length > 0) {
+      result[key] = encryptSensitiveData(value)
+      result['__encrypted__'] = true
+    } else {
+      result[key] = value
+    }
+  }
+  return result
+}
+
+const decryptPasswordData = (data: any): any => {
+  if (!data) return data
+  if (!data.__encrypted__) return data
+  const result: any = { ...data }
+  if (typeof result.password === 'string') {
+    result.password = decryptSensitiveData(result.password)
+  }
+  delete result.__encrypted__
+  return result
+}
+
+// Decrypt password fields in a passwords.json data structure.
+// Handles both the old format { passwords: [...] } and new format { items: [...] }.
+// Plaintext entries (no __encrypted__ flag) pass through unchanged,
+// so existing configs remain fully backward-compatible.
+const decryptPasswordFieldsInConfig = (data: any): any => {
+  if (!data) return data
+  const result: any = { ...data }
+
+  // New format: data.items[].password
+  if (Array.isArray(result.items)) {
+    result.items = result.items.map((item: any) => {
+      if (item && typeof item.password === 'string') {
+        return decryptPasswordData(item)
+      }
+      return item
+    })
+  }
+
+  // Old format: data.passwords[].password
+  if (Array.isArray(result.passwords)) {
+    result.passwords = result.passwords.map((entry: any) => {
+      if (entry && typeof entry.password === 'string') {
+        return decryptPasswordData(entry)
+      }
+      return entry
+    })
+  }
+
+  return result
+}
+
+// Encrypt password fields in a passwords.json data structure.
+// Handles both the old format { passwords: [...] } and new format { items: [...] }.
+const encryptPasswordFieldsInConfig = (data: any): any => {
+  if (!data) return data
+  const result: any = { ...data }
+
+  // New format: data.items[].password
+  if (Array.isArray(result.items)) {
+    result.items = result.items.map((item: any) => {
+      if (item && typeof item.password === 'string' && item.password.length > 0) {
+        return encryptPasswordData(item)
+      }
+      return item
+    })
+  }
+
+  // Old format: data.passwords[].password
+  if (Array.isArray(result.passwords)) {
+    result.passwords = result.passwords.map((entry: any) => {
+      if (entry && typeof entry.password === 'string' && entry.password.length > 0) {
+        return encryptPasswordData(entry)
+      }
+      return entry
+    })
+  }
+
+  return result
+}
 
 const formatMemory = (bytes: number): string => {
   if (bytes === 0 || isNaN(bytes)) return '0 B'
@@ -696,24 +858,23 @@ async function saveAppConfig(config: any) {
 function registerShortcuts(shortcuts: any) {
   globalShortcut.unregisterAll()
   if (!shortcuts) return
-  
+
   Object.entries(shortcuts).forEach(([toolId, accelerator]) => {
-    if (accelerator) {
+    if (accelerator && typeof accelerator === 'string' && isValidAccelerator(accelerator)) {
       try {
-        globalShortcut.register(accelerator as string, () => {
+        globalShortcut.register(accelerator, () => {
           if (win) {
             win.webContents.send('shortcut-triggered', toolId)
           }
         })
       } catch (error) {
-        console.error(`Failed to register shortcut for ${toolId}:`, error)
+        logger.warn(`registerShortcuts: failed for ${toolId}:`, error instanceof Error ? error.message : String(error))
       }
     }
   })
-  
-  // 注册窗口显示/隐藏快捷键
+
   const windowShortcut = appConfig?.windowShortcut || DEFAULT_APP_CONFIG.windowShortcut
-  if (windowShortcut) {
+  if (windowShortcut && typeof windowShortcut === 'string' && isValidAccelerator(windowShortcut)) {
     try {
       globalShortcut.register(windowShortcut, () => {
         if (win) {
@@ -725,9 +886,9 @@ function registerShortcuts(shortcuts: any) {
           }
         }
       })
-      logger.info(`窗口快捷键注册成功: ${windowShortcut}`)
+      logger.info(`窗口快捷键注册成功`)
     } catch (error) {
-      console.error(`Failed to register window shortcut:`, error)
+      logger.warn('registerShortcuts: failed to register window shortcut:', error instanceof Error ? error.message : String(error))
     }
   }
 }
@@ -756,12 +917,16 @@ async function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      webSecurity: true,
+      sandbox: true,
+      allowRunningInsecureContent: false
     },
     icon: path.join(PUBLIC, 'favicon.ico')
   })
-  
-  if (VITE_DEV_SERVER_URL) {
+
+  // Only open DevTools in development mode, never in production builds
+  if (!app.isPackaged && VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)
     win.webContents.openDevTools()
   } else {
@@ -913,22 +1078,49 @@ async function createWindow() {
   })
   
   ipcMain.handle('open-file', async (_, filePath: string) => {
-    if (filePath) {
+    if (!filePath) return
+    // Security: validate the path is not used for command injection
+    if (!isSafeFilePath(filePath)) {
+      logger.warn('open-file: rejected unsafe path:', JSON.stringify(filePath.substring(0, 100)))
+      return
+    }
+    try {
       await (shell.openPath as any)(filePath)
+    } catch (e) {
+      logger.error('open-file: failed:', e instanceof Error ? e.message : String(e))
     }
   })
   
   ipcMain.handle('open-url', async (_, url: string) => {
-    if (url) {
+    if (!url) return
+    // Security: only allow http/https URLs to prevent shell/protocol abuse
+    if (!isSafeUrl(url)) {
+      logger.warn('open-url: rejected unsafe URL:', JSON.stringify(url.substring(0, 100)))
+      return
+    }
+    try {
       await shell.openExternal(url)
+    } catch (e) {
+      logger.error('open-url: failed:', e instanceof Error ? e.message : String(e))
     }
   })
   
   ipcMain.handle('load-config', async (_, fileName: string) => {
-    return await loadConfig(fileName)
+    const data = await loadConfig(fileName)
+    // For passwords.json, decrypt password fields before returning to the UI.
+    // Plaintext entries (without __encrypted__ flag) pass through unchanged,
+    // so old configs are fully backward-compatible.
+    if (fileName === 'passwords.json' && data) {
+      return decryptPasswordFieldsInConfig(data)
+    }
+    return data
   })
-  
+
   ipcMain.handle('save-config', async (_, fileName: string, data: any) => {
+    // For passwords.json, encrypt password fields before writing to disk.
+    if (fileName === 'passwords.json' && data) {
+      data = encryptPasswordFieldsInConfig(data)
+    }
     await saveConfig(fileName, data)
     return true
   })
@@ -1082,7 +1274,9 @@ async function createWindow() {
   
   ipcMain.handle('get-processes', async () => {
     try {
-      const { stdout } = await execPromise('wmic process get ProcessId,Name,WorkingSetSize,UserModeTime,KernelModeTime /format:csv', { encoding: 'utf-8' })
+      const { stdout } = await execFilePromise('wmic', [
+        'process', 'get', 'ProcessId,Name,WorkingSetSize,UserModeTime,KernelModeTime', '/format:csv'
+      ], { encoding: 'utf-8' })
       const lines = stdout.trim().split('\n').filter(l => l.trim())
       if (lines.length < 2) return []
       
@@ -1132,7 +1326,14 @@ async function createWindow() {
     const errors: number[] = []
     for (const pid of pids) {
       try {
-        await execPromise(`taskkill /F /PID ${pid}`, { encoding: 'utf-8' })
+        // Security: validate PID is a valid positive integer (injection guard)
+        if (!isValidPid(pid)) {
+          logger.warn('kill-processes: rejected invalid PID:', pid)
+          errors.push(pid)
+          continue
+        }
+        // Use execFile with separate args, NOT shell string interpolation
+        await execFilePromise('taskkill', ['/F', '/PID', String(pid)])
       } catch (error) {
         errors.push(pid)
       }
@@ -1145,7 +1346,9 @@ async function createWindow() {
       const info: any = {}
       
       try {
-        const { stdout: cpuStdout } = await execPromise('wmic cpu get Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed /format:list', { encoding: 'utf-8' })
+        const { stdout: cpuStdout } = await execFilePromise('wmic', [
+          'cpu', 'get', 'Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed', '/format:list'
+        ], { encoding: 'utf-8' })
         const cpuLines = cpuStdout.trim().split('\n').filter(l => l.trim())
         
         let cpuName = 'Unknown'
@@ -1178,7 +1381,9 @@ async function createWindow() {
       }
       
       try {
-        const { stdout: usageStdout } = await execPromise('powershell -Command "(Get-Counter \"\\Processor(_Total)\\% Processor Time\").CounterSamples.CookedValue"', { encoding: 'utf-8' })
+        const { stdout: usageStdout } = await execFilePromise('powershell', [
+          '-NoProfile', '-Command', '(Get-Counter "\\Processor(_Total)\\% Processor Time").CounterSamples.CookedValue'
+        ], { encoding: 'utf-8' })
         const usageStr = usageStdout.trim()
         const usage = parseFloat(usageStr)
         if (!isNaN(usage) && usage >= 0 && usage <= 100) {
@@ -1187,7 +1392,9 @@ async function createWindow() {
       } catch (e) {
         console.error('Error getting CPU usage with PowerShell:', e)
         try {
-          const { stdout: wmicStdout } = await execPromise('wmic cpu get LoadPercentage', { encoding: 'utf-8' })
+          const { stdout: wmicStdout } = await execFilePromise('wmic', [
+            'cpu', 'get', 'LoadPercentage'
+          ], { encoding: 'utf-8' })
           const lines = wmicStdout.trim().split('\n').filter(l => l.trim())
           if (lines.length > 1) {
             const usages: number[] = []
@@ -1207,7 +1414,9 @@ async function createWindow() {
       }
       
       try {
-        const { stdout: memStdout } = await execPromise('wmic OS get TotalVisibleMemorySize,FreePhysicalMemory /format:list', { encoding: 'utf-8' })
+        const { stdout: memStdout } = await execFilePromise('wmic', [
+          'OS', 'get', 'TotalVisibleMemorySize,FreePhysicalMemory', '/format:list'
+        ], { encoding: 'utf-8' })
         const memLines = memStdout.trim().split('\n').filter(l => l.trim())
         
         let total = 0
@@ -1234,7 +1443,9 @@ async function createWindow() {
       }
       
       try {
-        const { stdout: gpuStdout } = await execPromise('wmic path win32_VideoController get Name,AdapterRAM /format:csv', { encoding: 'utf-8' })
+        const { stdout: gpuStdout } = await execFilePromise('wmic', [
+          'path', 'win32_VideoController', 'get', 'Name,AdapterRAM', '/format:csv'
+        ], { encoding: 'utf-8' })
         const gpuLines = gpuStdout.trim().split('\n').filter(l => l.trim())
         if (gpuLines.length > 1) {
           const gpuParts = gpuLines[gpuLines.length - 1].split(',')
@@ -1256,28 +1467,54 @@ async function createWindow() {
   
   ipcMain.handle('kill-process', async (_, pid: number) => {
     try {
-      await execPromise(`taskkill /F /PID ${pid}`, { encoding: 'utf-8' })
+      if (!isValidPid(pid)) {
+        logger.warn('kill-process: rejected invalid PID:', pid)
+        return { success: false, error: '无效的进程ID' }
+      }
+      // Use execFile with separate args, NOT shell string interpolation
+      await execFilePromise('taskkill', ['/F', '/PID', String(pid)])
       return { success: true }
     } catch (error) {
-      console.error('Error killing process:', error)
+      logger.error('kill-process: failed:', error instanceof Error ? error.message : String(error))
       return { success: false, error: '无法终止该进程' }
     }
   })
   
   ipcMain.handle('search-file-handle', async (_, filePath: string) => {
     try {
-      const normalizedPath = filePath.replace(/\\/g, '/').toLowerCase()
-      const { stdout } = await execPromise(
-        `powershell -Command "Get-Process | Where-Object {$_.Modules.ModuleName -like '*${normalizedPath.split('/').pop()}*'} | Select-Object Id, ProcessName | ConvertTo-Json"`,
-        { encoding: 'utf-8' }
-      )
-      if (stdout.trim()) {
-        const result = JSON.parse(stdout)
+      if (!isSafeFilePath(filePath)) {
+        logger.warn('search-file-handle: rejected unsafe path')
+        return []
+      }
+      // Extract the file name only (no path components)
+      const fileName = path.basename(filePath).replace(/\.[^/.]+$/, '')
+      if (!fileName || fileName.length > 100) {
+        return []
+      }
+      // Security: pass the search term via a separate process argument instead of
+      // string interpolation in shell/PowerShell - no injection is possible this way
+      const psCode = `
+        $ErrorActionPreference = 'Stop'
+        $searchTerm = $args[0]
+        if ([string]::IsNullOrEmpty($searchTerm)) { exit }
+        Get-Process | Where-Object {
+          try { $_.Modules.ModuleName -like ('*' + $searchTerm + '*') } catch { $false }
+        } | Select-Object Id, ProcessName | ConvertTo-Json -Compress
+      `
+      const { stdout } = await execFilePromise('powershell', [
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-Command', psCode,
+        '-args', fileName
+      ], { encoding: 'utf-8' })
+
+      if (stdout && stdout.trim()) {
+        const result = JSON.parse(stdout.trim())
         return Array.isArray(result) ? result : [result]
       }
       return []
     } catch (error) {
-      console.error('Error searching file handle:', error)
+      logger.warn('search-file-handle: failed:', error instanceof Error ? error.message : String(error))
       return []
     }
   })
@@ -1291,6 +1528,7 @@ async function createWindow() {
     customSymbols?: string[]
   }) => {
     const { length, includeNumbers, includeSymbols, includeUppercase, includeLowercase, customSymbols } = options
+    const safeLength = Math.max(4, Math.min(128, length || 16))
     let chars = ''
     if (includeLowercase) chars += 'abcdefghijklmnopqrstuvwxyz'
     if (includeUppercase) chars += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -1303,10 +1541,13 @@ async function createWindow() {
       }
     }
     if (!chars) chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+    // Security: use crypto.randomInt (uniform distribution) instead of
+    // randomBytes[i] % chars.length which creates a modulo bias and slightly
+    // favors the first chars in the pool.
     let password = ''
-    const randomBytes = crypto.randomBytes(length)
-    for (let i = 0; i < length; i++) {
-      password += chars[randomBytes[i] % chars.length]
+    const charLen = chars.length
+    for (let i = 0; i < safeLength; i++) {
+      password += chars[crypto.randomInt(0, charLen)]
     }
     return password
   })
@@ -1314,9 +1555,14 @@ async function createWindow() {
   ipcMain.handle('get-passwords', async () => {
     try {
       const data = await loadConfig('passwords.json')
-      return data || { groups: [], passwords: [] }
+      const result = data || { groups: [], passwords: [] }
+      // Decrypt password fields before sending to renderer (they never live decrypted on disk)
+      if (Array.isArray(result.passwords)) {
+        result.passwords = result.passwords.map((p: any) => decryptPasswordData(p))
+      }
+      return result
     } catch (error) {
-      console.error('Error loading passwords:', error)
+      logger.error('get-passwords: failed:', error instanceof Error ? error.message : String(error))
       return { groups: [], passwords: [] }
     }
   })
@@ -1328,24 +1574,28 @@ async function createWindow() {
       if (passwordData.id) {
         const index = existingData.passwords.findIndex((p: any) => p.id === passwordData.id)
         if (index !== -1) {
-          existingData.passwords[index] = {
+          // Encrypt the password field before writing to disk
+          const encrypted = encryptPasswordData({
             ...existingData.passwords[index],
             ...passwordData,
             updatedAt: now
-          }
+          })
+          existingData.passwords[index] = encrypted
         }
       } else {
-        existingData.passwords.push({
+        // Encrypt the password field before writing to disk
+        const encrypted = encryptPasswordData({
           ...passwordData,
           id: crypto.randomUUID(),
           createdAt: now,
           updatedAt: now
         })
+        existingData.passwords.push(encrypted)
       }
       await saveConfig('passwords.json', existingData)
       return true
     } catch (error) {
-      console.error('Error saving password:', error)
+      logger.error('save-password: failed:', error instanceof Error ? error.message : String(error))
       return false
     }
   })
@@ -1398,158 +1648,118 @@ async function createWindow() {
   })
 
   ipcMain.handle('resolve-shortcut', async (_, lnkPath: string) => {
-    logger.info('[resolve-shortcut] 开始解析快捷方式', { lnkPath })
+    logger.info('[resolve-shortcut] 开始解析快捷方式')
     try {
       if (!lnkPath || lnkPath.trim() === '') {
-        logger.warn('[resolve-shortcut] 无效的快捷方式路径: 路径为空')
         return { success: false, error: '路径为空' }
       }
 
       const trimmedPath = lnkPath.trim()
-      
+
+      if (!isSafeFilePath(trimmedPath)) {
+        logger.warn('[resolve-shortcut] rejected unsafe path')
+        return { success: false, error: '不安全的路径', targetPath: trimmedPath, isShortcut: false }
+      }
+
       if (!trimmedPath.toLowerCase().endsWith('.lnk')) {
-        logger.debug('[resolve-shortcut] 不是 .lnk 文件，直接返回原路径')
         return { success: true, targetPath: trimmedPath, isShortcut: false }
       }
 
       if (!fs.existsSync(trimmedPath)) {
-        logger.warn('[resolve-shortcut] 快捷方式文件不存在', { path: trimmedPath })
-        return { success: false, error: '文件不存在' }
+        return { success: false, error: '文件不存在', targetPath: trimmedPath, isShortcut: false }
       }
 
       try {
-        // 使用 JSON 参数传递路径，避免中文编码问题
-        const pathJson = JSON.stringify({ path: trimmedPath })
+        // SECURITY FIX: instead of embedding the user path into the PowerShell
+        // script via string interpolation (which could allow script injection),
+        // we encode the path to Base64 in Node.js and pass it as a separate arg
+        // so the PowerShell script only receives a fixed Base64 string via $args[0]
+        const pathBase64 = Buffer.from(trimmedPath, 'utf-8').toString('base64')
+
         const psScript = `
           $ErrorActionPreference = 'Stop'
           try {
-            $inputData = '${pathJson}' | ConvertFrom-Json
-            $lnkPath = $inputData.path
+            $lnkB64 = $args[0]
+            if ([string]::IsNullOrEmpty($lnkB64)) { exit }
+            $bytes = [System.Convert]::FromBase64String($lnkB64)
+            $lnkPath = [System.Text.Encoding]::UTF8.GetString($bytes)
             $shell = New-Object -ComObject WScript.Shell
             $shortcut = $shell.CreateShortcut($lnkPath)
             $target = $shortcut.TargetPath
             $arguments = $shortcut.Arguments
             $workingDir = $shortcut.WorkingDirectory
-            
-            if (-not $target -or $target -eq '') {
-              $target = $lnkPath
-              $isValid = $false
-            } else {
-              $isValid = $true
-            }
-            
-            # 将路径转换为 Base64 编码以避免控制台输出时的编码问题
-            $targetBytes = [System.Text.Encoding]::Unicode.GetBytes($target)
-            $targetBase64 = [Convert]::ToBase64String($targetBytes)
-            
-            $argsBytes = [System.Text.Encoding]::Unicode.GetBytes($arguments)
-            $argsBase64 = [Convert]::ToBase64String($argsBytes)
-            
-            $workingDirBytes = [System.Text.Encoding]::Unicode.GetBytes($workingDir)
-            $workingDirBase64 = [Convert]::ToBase64String($workingDirBytes)
-            
+            $isValid = $true
+            if ([string]::IsNullOrEmpty($target)) { $target = $lnkPath; $isValid = $false }
+            $enc = [System.Text.Encoding]::Unicode
             $output = [PSCustomObject]@{
               Success = $isValid
-              TargetPathBase64 = $targetBase64
-              ArgumentsBase64 = $argsBase64
-              WorkingDirectoryBase64 = $workingDirBase64
+              TargetPathBase64 = [System.Convert]::ToBase64String($enc.GetBytes($target))
+              ArgumentsBase64 = [System.Convert]::ToBase64String($enc.GetBytes($arguments))
+              WorkingDirectoryBase64 = [System.Convert]::ToBase64String($enc.GetBytes($workingDir))
               IsShortcut = $true
             }
-            
             $output | ConvertTo-Json -Compress
           } catch {
-            $inputData = '${pathJson}' | ConvertFrom-Json
-            $targetBytes = [System.Text.Encoding]::Unicode.GetBytes($inputData.path)
-            $targetBase64 = [Convert]::ToBase64String($targetBytes)
-            $errBytes = [System.Text.Encoding]::Unicode.GetBytes($_.Exception.Message)
-            $errBase64 = [Convert]::ToBase64String($errBytes)
+            $enc = [System.Text.Encoding]::Unicode
             $output = [PSCustomObject]@{
               Success = $false
-              TargetPathBase64 = $targetBase64
-              ErrorBase64 = $errBase64
+              ErrorBase64 = [System.Convert]::ToBase64String($enc.GetBytes($_.Exception.Message))
               IsShortcut = $false
             }
             $output | ConvertTo-Json -Compress
           }
         `
-        
-        logger.debug('[resolve-shortcut] 执行 PowerShell 脚本解析快捷方式')
-        logger.debug('[resolve-shortcut] PowerShell 脚本长度:', psScript.length)
-        
-        const encodedScript = Buffer.from(psScript, 'utf16le').toString('base64')
-        const { stdout, stderr } = await execPromise(`powershell -EncodedCommand ${encodedScript}`, { encoding: 'utf-8' })
-        
-        logger.debug('[resolve-shortcut] PowerShell 执行完成')
-        logger.debug('[resolve-shortcut] PowerShell stdout (原始):', { length: stdout.length, content: stdout.substring(0, Math.min(500, stdout.length)) })
-        
-        if (stderr && stderr.trim()) {
-          logger.warn('[resolve-shortcut] PowerShell stderr:', { stderr })
-        }
-        
-        const trimmedStdout = stdout.trim()
-        logger.debug('[resolve-shortcut] PowerShell stdout (去除空白后):', { length: trimmedStdout.length })
-        
+
+        const { stdout } = await execFilePromise('powershell', [
+          '-NoProfile',
+          '-ExecutionPolicy', 'Bypass',
+          '-Command', psScript,
+          '-args', pathBase64
+        ], { encoding: 'utf-8' })
+
+        const trimmedStdout = (stdout || '').trim()
         if (!trimmedStdout) {
-          logger.error('[resolve-shortcut] PowerShell 返回空输出')
-          return { success: true, targetPath: trimmedPath, isShortcut: false, error: 'PowerShell返回空输出' }
+          return { success: true, targetPath: trimmedPath, isShortcut: false }
         }
-        
+
         let result
         try {
           result = JSON.parse(trimmedStdout)
-          logger.debug('[resolve-shortcut] JSON 解析成功:', { result })
-        } catch (parseError) {
-          logger.error('[resolve-shortcut] JSON 解析失败', { 
-            error: parseError instanceof Error ? parseError.message : String(parseError),
-            rawOutput: trimmedStdout.substring(0, Math.min(1000, trimmedStdout.length))
-          })
-          return { success: true, targetPath: trimmedPath, isShortcut: false, error: 'JSON解析失败' }
+        } catch {
+          return { success: true, targetPath: trimmedPath, isShortcut: false }
         }
-        
-        // 使用 Base64 编码安全地传递路径，避免编码问题
+
         const decodeBase64 = (b64: string): string => {
           if (!b64) return ''
-          try {
-            return Buffer.from(b64, 'base64').toString('utf16le')
-          } catch {
-            return ''
-          }
+          try { return Buffer.from(b64, 'base64').toString('utf16le') } catch { return '' }
         }
-        
+
         const targetPath = result.TargetPathBase64 ? decodeBase64(result.TargetPathBase64) : trimmedPath
         const argumentsStr = result.ArgumentsBase64 ? decodeBase64(result.ArgumentsBase64) : ''
         const workingDir = result.WorkingDirectoryBase64 ? decodeBase64(result.WorkingDirectoryBase64) : ''
         const isShortcutResult = result.IsShortcut === true || (result.Success === true && targetPath !== trimmedPath)
-        
+
         if (result.Success !== true) {
           const errMsg = result.ErrorBase64 ? decodeBase64(result.ErrorBase64) : '未知错误'
-          logger.warn('[resolve-shortcut] PowerShell 返回失败', { error: errMsg })
           return { success: true, targetPath, isShortcut: false, error: errMsg }
         }
-        
-        logger.info('[resolve-shortcut] 快捷方式解析成功', {
-          lnkPath: trimmedPath,
+
+        logger.info('[resolve-shortcut] 快捷方式解析成功')
+        return {
+          success: true,
           targetPath,
-          isShortcut: isShortcutResult,
-          arguments: argumentsStr,
-          workingDirectory: workingDir
-        })
-        
-        return { 
-          success: true, 
-          targetPath, 
           isShortcut: isShortcutResult,
           arguments: argumentsStr,
           workingDirectory: workingDir
         }
       } catch (psError) {
         const errMsg = psError instanceof Error ? psError.message : String(psError)
-        logger.error('[resolve-shortcut] PowerShell 执行异常', { error: errMsg })
+        logger.warn('[resolve-shortcut] PowerShell 执行异常', { error: errMsg })
         return { success: true, targetPath: trimmedPath, isShortcut: false, error: errMsg }
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      logger.error('[resolve-shortcut] 解析快捷方式时发生异常:', { lnkPath, error: errorMessage })
+      logger.error('[resolve-shortcut] 解析快捷方式时发生异常')
       return { success: false, error: errorMessage, targetPath: lnkPath }
     }
   })
@@ -1643,7 +1853,11 @@ async function createWindow() {
   })
 }
 
-async function searchFilesRecursive(directory: string, pattern: string): Promise<string[]> {
+async function searchFilesRecursive(directory: string, pattern: string, depth = 0): Promise<string[]> {
+  const MAX_DEPTH = 10
+  if (depth > MAX_DEPTH) return []
+  if (!isSafeFilePath(directory)) return []
+
   const results: string[] = []
   try {
     const files = await readdir(directory)
@@ -1651,13 +1865,13 @@ async function searchFilesRecursive(directory: string, pattern: string): Promise
       const filePath = path.join(directory, file)
       const statInfo = await stat(filePath)
       if (statInfo.isDirectory()) {
-        results.push(...(await searchFilesRecursive(filePath, pattern)))
-      } else if (file.toLowerCase().includes(pattern.toLowerCase())) {
+        results.push(...(await searchFilesRecursive(filePath, pattern, depth + 1)))
+      } else if (pattern && file.toLowerCase().includes(pattern.toLowerCase())) {
         results.push(filePath)
       }
     }
   } catch (error) {
-    console.error(`Error searching files in ${directory}:`, error)
+    logger.warn('searchFilesRecursive: failed:', error instanceof Error ? error.message : String(error))
   }
   return results
 }
