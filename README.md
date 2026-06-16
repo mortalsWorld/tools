@@ -3,8 +3,8 @@
 一个现代化的通用工具集合桌面应用程序，基于 Electron + React + TypeScript 构建。
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Electron](https://img.shields.io/badge/Electron-31.7.7-47848F?style=flat-square&logo=electron)
-![React](https://img.shields.io/badge/React-18.3.1-61DAFB?style=flat-square&logo=react)
+![Electron](https://img.shields.io/badge/Electron-42.4.0-47848F?style=flat-square&logo=electron)
+![React](https://img.shields.io/badge/React-19.2.7-61DAFB?style=flat-square&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.4.5-3178C6?style=flat-square&logo=typescript)
 
 ## 功能特性
@@ -46,12 +46,21 @@
 
 ## 技术栈
 
-- **前端框架**: React 18.3
+- **前端框架**: React 19.2
 - **类型系统**: TypeScript 5.4
-- **桌面框架**: Electron 31.7
+- **桌面框架**: Electron 42.4
 - **UI 组件库**: Ant Design 6.4
 - **拖拽排序**: @dnd-kit
-- **构建工具**: Vite 5.3 + electron-builder
+- **构建工具**: Vite 8.0 + electron-builder
+
+## 安全特性
+
+- ✅ **密码加密存储** - 使用 Electron `safeStorage`（系统级加密：Windows DPAPI / macOS Keychain）
+- ✅ **命令注入防护** - 使用 `execFile` 参数化调用，禁止字符串拼接
+- ✅ **内容安全策略 (CSP)** - 严格的 CSP 配置，限制资源加载
+- ✅ **URL 协议白名单** - 仅允许 http/https/ftp/mailto 等安全协议
+- ✅ **生产环境 DevTools 关闭** - 仅开发模式启用
+- ✅ **sandbox 启用** - BrowserWindow sandbox 安全隔离
 
 ## 项目结构
 
@@ -91,6 +100,9 @@ electron/
 ├── main.ts                 # Electron 主进程入口
 ├── preload.ts              # 预加载脚本
 └── logger.ts              # 日志工具
+
+scripts/
+└── afterPack.js           # 打包后优化脚本（清理未使用的 Chromium 语言包）
 ```
 
 ## 安装与运行
@@ -119,8 +131,15 @@ npm run build
 ```
 
 构建完成后，安装包位于 `release/` 目录下：
-- `DevTools Setup 1.0.0.exe` - NSIS 安装包
-- `DevTools 1.0.0.exe` - 便携版
+- `DevTools Setup 1.3.0.exe` - NSIS 安装包（约 101 MB）
+- `DevTools 1.3.0.exe` - 便携版（约 101 MB）
+
+### 打包体积优化
+
+应用通过以下方式优化打包体积：
+- **删除未使用的 Chromium 语言包** - 仅保留中英日韩语言包，节省约 45 MB
+- **maximum 压缩** - 使用最高压缩率
+- **asar 打包** - 应用代码和资源打包为 asar 格式
 
 ## 配置持久化
 
@@ -132,7 +151,7 @@ npm run build
 各工具的配置以 JSON 格式存储：
 - `shortcuts.json` - 文件快速启动配置
 - `websites.json` - 网页快速打开配置
-- `passwords.json` - 密码管理配置
+- `passwords.json` - 密码管理配置（**已加密**）
 
 ## 开发指南
 
