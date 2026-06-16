@@ -10,15 +10,19 @@ const execFilePromise = promisify(execFile)
 const rmdir = promisify(fs.rmdir)
 
 // ============================================================================
-// Security helpers
+// 安全辅助函数
 // ============================================================================
 
-// Validate that a URL only uses safe protocols
+/**
+ * 验证URL是否只使用安全协议
+ * @param url - 要验证的URL字符串
+ * @returns 如果URL使用安全协议返回true，否则返回false
+ */
 const isSafeUrl = (url: string): boolean => {
   if (!url || typeof url !== 'string') return false
   try {
     const u = new URL(url)
-    // Allow common web protocols; block script/resource-URI schemes
+    // 允许常见的安全协议；阻止脚本/资源URI协议
     const safe = ['http:', 'https:', 'ftp:', 'mailto:', 'tel:', 'telnet:']
     return safe.includes(u.protocol)
   } catch {
@@ -26,59 +30,78 @@ const isSafeUrl = (url: string): boolean => {
   }
 }
 
-// Validate that a PID is strictly numeric (no injection)
+/**
+ * 验证PID是否为有效的正整数（防止命令注入）
+ * @param pid - 进程ID
+ * @returns 如果是有效PID返回true，否则返回false
+ */
 const isValidPid = (pid: number): boolean => {
   return Number.isInteger(pid) && pid > 0 && pid <= 999999
 }
 
-// Validate that a filePath doesn't contain command injection characters.
-// Windows valid filename chars: letters, digits, space, ._-,()&%$@!+=[]{};,#~`  etc.
-// Windows INVALID filename chars: < > : " / \ | ? * (plus control chars 0x00-0x1F)
-// We block control characters and genuinely dangerous patterns; legitimate
-// Windows path characters like & and % are allowed for backward compatibility.
+/**
+ * 验证文件路径是否不包含命令注入字符
+ * Windows有效文件名字符：字母、数字、空格、._-,()&%$@!+=[]{};,#~`等
+ * Windows无效文件名字符：< > : " / \ | ? *（以及控制字符0x00-0x1F）
+ * 我们阻止控制字符和真正危险的模式；为了向后兼容，允许合法的Windows路径字符如&和%
+ * @param filePath - 文件路径
+ * @returns 如果路径安全返回true，否则返回false
+ */
 const isSafeFilePath = (filePath: string): boolean => {
   if (!filePath || typeof filePath !== 'string') return false
   if (filePath.length > 512) return false
-  // Block control characters (0x00-0x1F, including null, tab, newline)
+  // 阻止控制字符（0x00-0x1F，包括null、tab、换行）
   if (/[\x00-\x1F]/.test(filePath)) return false
-  // Block pipe/redirect which are never part of valid file paths
+  // 阻止管道/重定向字符，它们永远不是有效文件路径的一部分
   if (/[|<>]/.test(filePath)) return false
   return true
 }
 
-// Validate accelerator strings for globalShortcut.register
+/**
+ * 验证全局快捷键加速器字符串
+ * @param accelerator - 加速器字符串
+ * @returns 如果格式有效返回true，否则返回false
+ */
 const isValidAccelerator = (accelerator: string): boolean => {
   if (!accelerator || typeof accelerator !== 'string') return false
   if (accelerator.length > 64) return false
-  // Only allow alphanumeric + modifier key symbols (+ space F keys etc)
+  // 只允许字母数字+修饰键符号（+空格F键等）
   return /^[A-Za-z0-9+\-]+(?:\s*\+\s*[A-Za-z0-9]+)*$/.test(accelerator)
 }
 
-// Encrypt sensitive data (passwords) using Electron's safeStorage
-// Falls back to base64 (obscured but not cryptographically secure)
-// if safeStorage is unavailable (e.g., before app login on some OS)
+/**
+ * 使用Electron的safeStorage加密敏感数据（密码）
+ * 如果safeStorage不可用（例如某些操作系统上应用登录前），回退到base64编码
+ * @param data - 要加密的敏感数据
+ * @returns 加密后的字符串
+ */
 const encryptSensitiveData = (data: string): string => {
   try {
     if (safeStorage.isEncryptionAvailable()) {
       return safeStorage.encryptString(data).toString('base64')
     }
   } catch (e) {
-    logger.warn('encryptSensitiveData: safeStorage unavailable, using fallback')
+    logger.warn('encryptSensitiveData: safeStorage不可用，使用回退方案')
   }
-  // Fallback: weak obfuscation (not encryption) - warn the user
+  // 回退方案：弱混淆（不是加密）- 记录警告
   return '__b64__' + Buffer.from(data, 'utf-8').toString('base64')
 }
 
+/**
+ * 解密敏感数据
+ * 如果数据看起来不像base64编码，原样返回（与旧版明文配置向后兼容）
+ * safeStorage加密的数据看起来像一个长base64字符串；base64回退方案以'__b64__'开头
+ * @param data - 要解密的数据
+ * @returns 解密后的明文
+ */
 const decryptSensitiveData = (data: string): string => {
   if (!data) return ''
-  // If the data doesn't look like base64, return it as-is (backward compatibility with plaintext)
-  // SafeStorage encrypted data looks like a long base64 string; base64 fallback starts with '__b64__'
+  // 如果数据不以'__b64__'开头，检查是否可能是明文
+  // 如果不匹配base64模式，假设是旧版明文数据
   if (!data.startsWith('__b64__')) {
-    // Check if it might be plaintext (non-base64 characters or short length)
-    // If it doesn't match base64 pattern, assume it's old plaintext data
     const looksLikeBase64 = /^[A-Za-z0-9+/=]{20,}$/.test(data)
     if (!looksLikeBase64) {
-      return data  // Plaintext from old config - return as-is
+      return data  // 旧配置中的明文 - 原样返回
     }
   }
   try {
@@ -91,19 +114,23 @@ const decryptSensitiveData = (data: string): string => {
       return decrypted
     }
   } catch (e) {
-    logger.warn('decryptSensitiveData: decryption failed, returning original:', e instanceof Error ? e.message : String(e))
-    // Fall through - return original data unchanged (might be plaintext from old config)
+    logger.warn('decryptSensitiveData: 解密失败，返回原始数据:', e instanceof Error ? e.message : String(e))
+    // 继续执行 - 返回原始数据不变（可能是旧配置的明文）
   }
-  // As a last resort, return the original data unchanged
-  // This handles: safeStorage unavailable but data looks base64, or encryption errors
+  // 最后手段：返回原始数据不变
+  // 处理：safeStorage不可用但数据看起来像base64，或加密错误
   return data
 }
 
-// Encrypt password fields in a password data structure
-// If the data already has __encrypted__ flag, it's returned unchanged (prevent double-encryption)
+/**
+ * 加密密码数据结构中的密码字段
+ * 如果数据已经有__encrypted__标记，原样返回（防止重复加密）
+ * @param data - 密码数据对象
+ * @returns 加密后的密码数据
+ */
 const encryptPasswordData = (data: any): any => {
   if (!data) return data
-  // Don't re-encrypt already-encrypted entries
+  // 不对已加密的条目重新加密
   if (data.__encrypted__) return data
   const result: any = {}
   for (const [key, value] of Object.entries(data)) {
@@ -117,10 +144,17 @@ const encryptPasswordData = (data: any): any => {
   return result
 }
 
+/**
+ * 解密密码数据结构中的密码字段
+ * 没有__encrypted__标记表示这是明文（旧格式或从未加密）
+ * 原样返回以保持向后兼容
+ * @param data - 加密的密码数据对象
+ * @returns 解密后的密码数据
+ */
 const decryptPasswordData = (data: any): any => {
   if (!data) return data
-  // No __encrypted__ flag means this is plaintext (old format or never encrypted)
-  // Return unchanged for backward compatibility
+  // 没有__encrypted__标记表示这是明文（旧格式或从未加密）
+  // 原样返回以保持向后兼容
   if (!data.__encrypted__) return data
   const result: any = { ...data }
   if (typeof result.password === 'string') {
@@ -130,15 +164,18 @@ const decryptPasswordData = (data: any): any => {
   return result
 }
 
-// Decrypt password fields in a passwords.json data structure.
-// Handles both the old format { passwords: [...] } and new format { items: [...] }.
-// Plaintext entries (no __encrypted__ flag) pass through unchanged,
-// so existing configs remain fully backward-compatible.
+/**
+ * 解密passwords.json数据结构中的密码字段
+ * 支持旧格式{ passwords: [...] }和新格式{ items: [...] }
+ * 明文条目（没有__encrypted__标记）原样通过，因此现有配置完全向后兼容
+ * @param data - passwords.json配置数据
+ * @returns 解密后的配置数据
+ */
 const decryptPasswordFieldsInConfig = (data: any): any => {
   if (!data) return data
   const result: any = { ...data }
 
-  // New format: data.items[].password
+  // 新格式：data.items[].password
   if (Array.isArray(result.items)) {
     result.items = result.items.map((item: any) => {
       if (item && typeof item.password === 'string') {
@@ -148,7 +185,7 @@ const decryptPasswordFieldsInConfig = (data: any): any => {
     })
   }
 
-  // Old format: data.passwords[].password
+  // 旧格式：data.passwords[].password
   if (Array.isArray(result.passwords)) {
     result.passwords = result.passwords.map((entry: any) => {
       if (entry && typeof entry.password === 'string') {
@@ -161,13 +198,17 @@ const decryptPasswordFieldsInConfig = (data: any): any => {
   return result
 }
 
-// Encrypt password fields in a passwords.json data structure.
-// Handles both the old format { passwords: [...] } and new format { items: [...] }.
+/**
+ * 加密passwords.json数据结构中的密码字段
+ * 支持旧格式{ passwords: [...] }和新格式{ items: [...] }
+ * @param data - passwords.json配置数据
+ * @returns 加密后的配置数据
+ */
 const encryptPasswordFieldsInConfig = (data: any): any => {
   if (!data) return data
   const result: any = { ...data }
 
-  // New format: data.items[].password
+  // 新格式：data.items[].password
   if (Array.isArray(result.items)) {
     result.items = result.items.map((item: any) => {
       if (item && typeof item.password === 'string' && item.password.length > 0) {
@@ -177,7 +218,7 @@ const encryptPasswordFieldsInConfig = (data: any): any => {
     })
   }
 
-  // Old format: data.passwords[].password
+  // 旧格式：data.passwords[].password
   if (Array.isArray(result.passwords)) {
     result.passwords = result.passwords.map((entry: any) => {
       if (entry && typeof entry.password === 'string' && entry.password.length > 0) {
@@ -190,6 +231,11 @@ const encryptPasswordFieldsInConfig = (data: any): any => {
   return result
 }
 
+/**
+ * 将字节数格式化为可读的内存大小字符串
+ * @param bytes - 字节数
+ * @returns 格式化的大小字符串（如 "1.5 MB）
+ */
 const formatMemory = (bytes: number): string => {
   if (bytes === 0 || isNaN(bytes)) return '0 B'
   const k = 1024
@@ -198,6 +244,7 @@ const formatMemory = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
+// Node.js 文件系统 Promise 封装
 const readdir = promisify(fs.readdir)
 const stat = promisify(fs.stat)
 const readFile = promisify(fs.readFile)
@@ -206,11 +253,13 @@ const copyFile = promisify(fs.copyFile)
 const unlink = promisify(fs.unlink)
 const mkdir = promisify(fs.mkdir)
 
+// 是否为开发模式标志
 const isDev = !!process.env.VITE_DEV_SERVER_URL
 const isPackaged = !isDev
 console.log('[DEBUG] isDev:', isDev)
 console.log('[DEBUG] isPackaged:', isPackaged)
 
+// Vite 构建产物目录
 const DIST = path.join(__dirname, '../dist')
 const PUBLIC = path.join(DIST, '../public')
 process.env.DIST = DIST
@@ -219,10 +268,16 @@ process.env.PUBLIC = PUBLIC
 let win: BrowserWindow | null
 const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 
+// 配置路径变量
 let CONFIG_PATH: string
 let APP_DIR: string
 
+// 应用配置对象
 let appConfig: any = null
+
+/**
+ * 默认应用配置
+ */
 const DEFAULT_APP_CONFIG = {
   configDir: '',
   shortcuts: {},
@@ -241,8 +296,12 @@ const DEFAULT_APP_CONFIG = {
   logLevel: 'INFO'  // 日志等级
 }
 
+// 备份定时器
 let backupTimer: NodeJS.Timeout | null = null
 
+/**
+ * 确保配置目录存在，如果不存在则创建
+ */
 async function ensureConfigDir() {
   try {
     if (!fs.existsSync(CONFIG_PATH)) {
@@ -254,26 +313,38 @@ async function ensureConfigDir() {
   }
 }
 
+/**
+ * 加载配置文件
+ * 对于passwords.json，自动解密密码字段
+ * 支持旧格式{ passwords: [] }和新格式{ items: [] }
+ * 明文条目（没有__encrypted__标记）原样返回以保持向后兼容
+ * @param fileName - 配置文件名
+ * @returns 配置数据，如果加载失败返回null
+ */
 async function loadConfig(fileName: string) {
   try {
     await ensureConfigDir()
     const filePath = path.join(CONFIG_PATH, fileName)
     const content = await readFile(filePath, 'utf-8')
     const data = JSON.parse(content)
-    // Decrypt password fields in passwords.json
-    // Handles both old { passwords: [] } and new { items: [] } formats
-    // Plaintext entries (without __encrypted__ flag) are returned unchanged for backward compatibility
+    // 对passwords.json解密密码字段
+    // 支持旧格式{ passwords: [] }和新格式{ items: [] }
+    // 明文条目（没有__encrypted__标记）原样返回以保持向后兼容
     if (fileName === 'passwords.json' && data) {
       const decrypted = decryptPasswordFieldsInConfig(data)
       return decrypted
     }
     return data
   } catch (error) {
-    logger.error(`loadConfig: failed to load ${fileName}:`, error instanceof Error ? error.message : String(error))
+    logger.error(`loadConfig: 加载 ${fileName} 失败:`, error instanceof Error ? error.message : String(error))
     return null
   }
 }
 
+/**
+ * 创建配置文件的备份（带有时间戳）
+ * @param fileName - 要备份的配置文件名
+ */
 async function createBackup(fileName: string) {
   try {
     const sourcePath = path.join(CONFIG_PATH, fileName)
@@ -287,10 +358,14 @@ async function createBackup(fileName: string) {
     await copyFile(sourcePath, backupPath)
     await cleanupOldBackups(fileName)
   } catch (error) {
-    console.error(`Error creating backup for ${fileName}:`, error)
+    console.error(`createBackup: 创建 ${fileName} 备份失败:`, error)
   }
 }
 
+/**
+ * 清理旧的备份文件，只保留最近 N 个
+ * @param fileName - 要清理备份的配置文件名
+ */
 async function cleanupOldBackups(fileName: string) {
   try {
     const files = await readdir(CONFIG_PATH)
@@ -310,15 +385,22 @@ async function cleanupOldBackups(fileName: string) {
         try {
           await unlink(path.join(CONFIG_PATH, file.name))
         } catch (deleteError) {
-          console.error(`Error deleting backup ${file.name}:`, deleteError)
+          console.error(`cleanupOldBackups: 删除备份 ${file.name} 失败:`, deleteError)
         }
       }
     }
   } catch (error) {
-    console.error(`Error cleaning up backups for ${fileName}:`, error)
+    console.error(`cleanupOldBackups: 清理 ${fileName} 备份失败:`, error)
   }
 }
 
+/**
+ * 递归复制目录内容（支持排除子目录）
+ * @param source - 源目录路径
+ * @param destination - 目标目录路径
+ * @param excludeDirs - 要排除的子目录名数组
+ * @returns 复制成功返回true，失败返回false
+ */
 async function copyDirectory(source: string, destination: string, excludeDirs: string[] = []) {
   try {
     await mkdir(destination, { recursive: true })
@@ -341,11 +423,16 @@ async function copyDirectory(source: string, destination: string, excludeDirs: s
     }
     return true
   } catch (error) {
-    console.error(`Error copying directory from ${source} to ${destination}:`, error)
+    console.error(`copyDirectory: 从 ${source} 复制到 ${destination} 失败:`, error)
     return false
   }
 }
 
+/**
+ * 递归删除目录及其内容
+ * @param dir - 要删除的目录路径
+ * @returns 删除成功返回true，失败返回false
+ */
 async function removeDirectory(dir: string) {
   try {
     if (!fs.existsSync(dir)) {
@@ -364,11 +451,15 @@ async function removeDirectory(dir: string) {
     await rmdir(dir)
     return true
   } catch (error) {
-    logger.error(`Error removing directory ${dir}:`, error)
+    logger.error(`removeDirectory: 删除目录 ${dir} 失败:`, error)
     return false
   }
 }
 
+/**
+ * 获取备份目录路径
+ * @returns 备份目录路径
+ */
 function getBackupDir() {
   if (appConfig?.backupDir) {
     return appConfig.backupDir
@@ -376,6 +467,10 @@ function getBackupDir() {
   return path.join(CONFIG_PATH, 'backups')
 }
 
+/**
+ * 确保备份目录存在，如果不存在则创建
+ * @returns 备份目录路径
+ */
 async function ensureBackupDir() {
   const backupDir = getBackupDir()
   try {
@@ -390,6 +485,11 @@ async function ensureBackupDir() {
   }
 }
 
+/**
+ * 递归计算目录的总大小（字节数）
+ * @param dir - 要计算的目录路径
+ * @returns 目录总大小（字节数）
+ */
 async function calculateDirectorySize(dir: string) {
   let totalSize = 0
   try {
@@ -409,6 +509,11 @@ async function calculateDirectorySize(dir: string) {
   return totalSize
 }
 
+/**
+ * 创建完整备份（复制整个配置目录到备份目录）
+ * @param note - 备份备注信息
+ * @returns 备份信息对象（id、时间戳、大小等）
+ */
 async function createFullBackup(note?: string) {
   try {
     logger.info('createFullBackup: 开始创建完整备份')
@@ -494,6 +599,12 @@ async function createFullBackup(note?: string) {
   }
 }
 
+/**
+ * 将备份间隔时间转换为毫秒数
+ * @param interval - 间隔数值
+ * @param unit - 时间单位（minutes/hours/days）
+ * @returns 毫秒数
+ */
 function calculateIntervalMs(interval: number, unit: string): number {
   const ms = {
     minutes: 60 * 1000,
@@ -503,6 +614,10 @@ function calculateIntervalMs(interval: number, unit: string): number {
   return interval * (ms[unit as keyof typeof ms] || ms.hours)
 }
 
+/**
+ * 检查是否应该立即执行备份（首次启动或达到间隔时间）
+ * @returns 是否需要备份
+ */
 async function shouldBackupNow(): Promise<boolean> {
   try {
     if (!appConfig.backupEnabled) {
@@ -548,6 +663,9 @@ async function shouldBackupNow(): Promise<boolean> {
   }
 }
 
+/**
+ * 启动定时备份调度器
+ */
 async function startBackupScheduler(): Promise<void> {
   try {
     stopBackupScheduler()
@@ -577,6 +695,9 @@ async function startBackupScheduler(): Promise<void> {
   }
 }
 
+/**
+ * 停止定时备份调度器
+ */
 function stopBackupScheduler(): void {
   if (backupTimer) {
     logger.info('stopBackupScheduler: 停止备份定时器')
@@ -585,6 +706,10 @@ function stopBackupScheduler(): void {
   }
 }
 
+/**
+ * 获取所有备份列表
+ * @returns 备份信息对象数组（按时间倒序）
+ */
 async function getBackupList() {
   try {
     const backupDir = getBackupDir()
@@ -630,6 +755,11 @@ async function getBackupList() {
   }
 }
 
+/**
+ * 删除指定的备份
+ * @param backupId - 备份ID（即备份目录名）
+ * @returns 删除成功返回true
+ */
 async function deleteBackup(backupId: string) {
   try {
     logger.info(`deleteBackup: 删除备份: ${backupId}`)
@@ -654,6 +784,11 @@ async function deleteBackup(backupId: string) {
   }
 }
 
+/**
+ * 从指定备份恢复配置
+ * @param backupId - 备份ID
+ * @returns 恢复成功返回true
+ */
 async function restoreBackup(backupId: string) {
   try {
     logger.info(`restoreBackup: 从备份恢复: ${backupId}`)
@@ -717,6 +852,11 @@ async function restoreBackup(backupId: string) {
   }
 }
 
+/**
+ * 从外部目录导入备份配置
+ * @param backupPath - 外部备份目录路径
+ * @returns 导入成功返回true
+ */
 async function importBackup(backupPath: string) {
   try {
     logger.info(`importBackup: 导入备份: ${backupPath}`)
@@ -763,6 +903,15 @@ async function importBackup(backupPath: string) {
   }
 }
 
+/**
+ * 保存配置文件
+ * 对于passwords.json，保存前自动加密密码字段
+ * 支持旧格式{ passwords: [] }和新格式{ items: [] }
+ * 明文密码会被加密；已加密的条目（带有__encrypted__标记）会跳过
+ * @param fileName - 配置文件名
+ * @param data - 要保存的配置数据
+ * @returns 如果保存成功返回true，否则返回false
+ */
 async function saveConfig(fileName: string, data: any) {
   logger.info(`[saveConfig] 开始保存配置: ${fileName}`)
   logger.info(`[saveConfig] CONFIG_PATH: ${CONFIG_PATH}`)
@@ -781,9 +930,9 @@ async function saveConfig(fileName: string, data: any) {
       await createBackup(fileName)
     }
     
-    // Encrypt password fields in passwords.json before writing to disk
-    // Handles both old { passwords: [] } and new { items: [] } formats
-    // Plaintext passwords are encrypted; already-encrypted entries (with __encrypted__) are skipped
+    // 保存前对passwords.json加密密码字段
+    // 支持旧格式{ passwords: [] }和新格式{ items: [] }
+    // 明文密码会被加密；已加密的条目（带有__encrypted__标记）会跳过
     let dataToSave = data
     if (fileName === 'passwords.json' && data) {
       dataToSave = encryptPasswordFieldsInConfig(data)
@@ -810,6 +959,10 @@ async function saveConfig(fileName: string, data: any) {
   }
 }
 
+/**
+ * 加载应用配置（app-config.json）
+ * @returns 应用配置对象（加载失败时返回默认配置）
+ */
 async function loadAppConfig() {
   logger.info('loadAppConfig: 加载应用配置')
   try {
@@ -824,6 +977,9 @@ async function loadAppConfig() {
   }
 }
 
+/**
+ * 通知渲染进程配置已更改
+ */
 function notifyConfigChanged() {
   if (win) {
     logger.debug('notifyConfigChanged: 发送配置更改通知')
@@ -833,6 +989,11 @@ function notifyConfigChanged() {
   }
 }
 
+/**
+ * 保存应用配置（处理配置目录迁移、备份调度器重启、日志等级更新等）
+ * @param config - 新的应用配置对象
+ * @returns 保存成功返回true
+ */
 async function saveAppConfig(config: any) {
   const oldBackupEnabled = appConfig?.backupEnabled
   const oldBackupInterval = appConfig?.backupInterval
@@ -890,6 +1051,10 @@ async function saveAppConfig(config: any) {
   return true
 }
 
+/**
+ * 注册全局快捷键（工具快捷键和窗口显示/隐藏快捷键）
+ * @param shortcuts - 工具ID到快捷键的映射对象
+ */
 function registerShortcuts(shortcuts: any) {
   globalShortcut.unregisterAll()
   if (!shortcuts) return
@@ -903,7 +1068,7 @@ function registerShortcuts(shortcuts: any) {
           }
         })
       } catch (error) {
-        logger.warn(`registerShortcuts: failed for ${toolId}:`, error instanceof Error ? error.message : String(error))
+        logger.warn(`registerShortcuts: 注册 ${toolId} 快捷键失败:`, error instanceof Error ? error.message : String(error))
       }
     }
   })
@@ -923,33 +1088,53 @@ function registerShortcuts(shortcuts: any) {
       })
       logger.info(`窗口快捷键注册成功`)
     } catch (error) {
-      logger.warn('registerShortcuts: failed to register window shortcut:', error instanceof Error ? error.message : String(error))
+      logger.warn('registerShortcuts: 注册窗口快捷键失败:', error instanceof Error ? error.message : String(error))
     }
   }
 }
 
+/**
+ * 创建主窗口（设置应用目录、配置目录、初始化日志、迁移旧配置、加载应用配置、创建窗口）
+ */
 async function createWindow() {
+  // 获取应用程序安装目录（打包后）或项目根目录（开发模式）
   if (isPackaged) {
     APP_DIR = path.dirname(app.getPath('exe'))
   } else {
     APP_DIR = path.dirname(__dirname)
   }
   
+  // 配置文件存储在安装目录下的 config/ 子目录
   CONFIG_PATH = path.join(APP_DIR, 'config')
   const logDir = path.join(APP_DIR, 'logs')
   initLogger(logDir, 7)
-  logger.info(`[MAIN] APP_DIR: ${APP_DIR}`)
-  logger.info(`[MAIN] CONFIG_PATH: ${CONFIG_PATH}`)
+  logger.info(`[MAIN] 应用安装目录: ${APP_DIR}`)
+  logger.info(`[MAIN] 配置目录: ${CONFIG_PATH}`)
   
-  // Check safeStorage availability for password encryption
+  // 检查旧配置目录（用户数据目录），如有配置则迁移到新目录
+  const oldConfigPath = path.join(app.getPath('userData'), 'config')
+  if (fs.existsSync(oldConfigPath) && fs.readdirSync(oldConfigPath).length > 0) {
+    try {
+      logger.info(`[MAIN] 检测到旧配置目录: ${oldConfigPath}，开始迁移`)
+      if (!fs.existsSync(CONFIG_PATH)) {
+        fs.mkdirSync(CONFIG_PATH, { recursive: true })
+      }
+      await copyDirectory(oldConfigPath, CONFIG_PATH)
+      logger.info(`[MAIN] 旧配置迁移成功`)
+    } catch (e) {
+      logger.warn(`[MAIN] 旧配置迁移失败，将使用新配置目录:`, e instanceof Error ? e.message : String(e))
+    }
+  }
+  
+  // 检查 safeStorage 是否可用（用于密码加密）
   try {
     if (safeStorage.isEncryptionAvailable()) {
-      logger.info('[MAIN] safeStorage: encryption is available, passwords will be encrypted with system-level keychain')
+      logger.info('[MAIN] safeStorage 加密可用，密码将使用系统密钥链加密存储')
     } else {
-      logger.warn('[MAIN] safeStorage: encryption is NOT available on this system, passwords will use base64 obfuscation only')
+      logger.warn('[MAIN] safeStorage 加密不可用，密码将使用 base64 编码存储')
     }
   } catch (e) {
-    logger.warn('[MAIN] safeStorage: check failed:', e instanceof Error ? e.message : String(e))
+    logger.warn('[MAIN] 检查 safeStorage 失败:', e instanceof Error ? e.message : String(e))
   }
   
   await ensureConfigDir()
@@ -971,7 +1156,7 @@ async function createWindow() {
     icon: path.join(PUBLIC, 'favicon.ico')
   })
 
-  // Only open DevTools in development mode, never in production builds
+  // 仅在开发模式下打开开发者工具，生产构建中永远不打开
   if (!app.isPackaged && VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)
     win.webContents.openDevTools()
@@ -1125,39 +1310,39 @@ async function createWindow() {
   
   ipcMain.handle('open-file', async (_, filePath: string) => {
     if (!filePath) return
-    // Security: validate the path is not used for command injection
+    // 安全：验证路径不包含命令注入字符
     if (!isSafeFilePath(filePath)) {
-      logger.warn('open-file: rejected unsafe path:', JSON.stringify(filePath.substring(0, 100)))
+      logger.warn('open-file: 拒绝不安全的路径:', JSON.stringify(filePath.substring(0, 100)))
       return
     }
     try {
       await (shell.openPath as any)(filePath)
     } catch (e) {
-      logger.error('open-file: failed:', e instanceof Error ? e.message : String(e))
+      logger.error('open-file: 打开失败:', e instanceof Error ? e.message : String(e))
     }
   })
   
   ipcMain.handle('open-url', async (_, url: string) => {
     if (!url) return
-    // Security: only allow http/https URLs to prevent shell/protocol abuse
+    // 安全：仅允许 http/https 等安全协议，防止 shell/protocol 滥用
     if (!isSafeUrl(url)) {
-      logger.warn('open-url: rejected unsafe URL:', JSON.stringify(url.substring(0, 100)))
+      logger.warn('open-url: 拒绝不安全的 URL:', JSON.stringify(url.substring(0, 100)))
       return
     }
     try {
       await shell.openExternal(url)
     } catch (e) {
-      logger.error('open-url: failed:', e instanceof Error ? e.message : String(e))
+      logger.error('open-url: 打开失败:', e instanceof Error ? e.message : String(e))
     }
   })
   
   ipcMain.handle('load-config', async (_, fileName: string) => {
-    // loadConfig() handles password decryption for passwords.json automatically
+    // loadConfig()自动处理passwords.json的密码解密
     return await loadConfig(fileName)
   })
 
   ipcMain.handle('save-config', async (_, fileName: string, data: any) => {
-    // saveConfig() handles password encryption for passwords.json automatically
+    // saveConfig()自动处理passwords.json的密码加密
     await saveConfig(fileName, data)
     return true
   })
@@ -1363,13 +1548,13 @@ async function createWindow() {
     const errors: number[] = []
     for (const pid of pids) {
       try {
-        // Security: validate PID is a valid positive integer (injection guard)
+        // 安全：验证PID是有效的正整数（注入防护）
         if (!isValidPid(pid)) {
-          logger.warn('kill-processes: rejected invalid PID:', pid)
+          logger.warn('kill-processes: 拒绝无效的PID:', pid)
           errors.push(pid)
           continue
         }
-        // Use execFile with separate args, NOT shell string interpolation
+        // 使用execFile和分离的参数，不使用shell字符串插值
         await execFilePromise('taskkill', ['/F', '/PID', String(pid)])
       } catch (error) {
         errors.push(pid)
@@ -1505,14 +1690,14 @@ async function createWindow() {
   ipcMain.handle('kill-process', async (_, pid: number) => {
     try {
       if (!isValidPid(pid)) {
-        logger.warn('kill-process: rejected invalid PID:', pid)
+        logger.warn('kill-process: 拒绝无效的PID:', pid)
         return { success: false, error: '无效的进程ID' }
       }
-      // Use execFile with separate args, NOT shell string interpolation
+      // 使用execFile和分离的参数，不使用shell字符串插值
       await execFilePromise('taskkill', ['/F', '/PID', String(pid)])
       return { success: true }
     } catch (error) {
-      logger.error('kill-process: failed:', error instanceof Error ? error.message : String(error))
+      logger.error('kill-process: 终止进程失败:', error instanceof Error ? error.message : String(error))
       return { success: false, error: '无法终止该进程' }
     }
   })
@@ -1520,16 +1705,16 @@ async function createWindow() {
   ipcMain.handle('search-file-handle', async (_, filePath: string) => {
     try {
       if (!isSafeFilePath(filePath)) {
-        logger.warn('search-file-handle: rejected unsafe path')
+        logger.warn('search-file-handle: 拒绝不安全的路径')
         return []
       }
-      // Extract the file name only (no path components)
+      // 仅提取文件名（不包含路径组件）
       const fileName = path.basename(filePath).replace(/\.[^/.]+$/, '')
       if (!fileName || fileName.length > 100) {
         return []
       }
-      // Security: pass the search term via a separate process argument instead of
-      // string interpolation in shell/PowerShell - no injection is possible this way
+      // 安全：通过单独的进程参数传递搜索词，而不是
+      // 在shell/PowerShell中进行字符串插值 - 这样不可能进行注入
       const psCode = `
         $ErrorActionPreference = 'Stop'
         $searchTerm = $args[0]
@@ -1578,9 +1763,9 @@ async function createWindow() {
       }
     }
     if (!chars) chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-    // Security: use crypto.randomInt (uniform distribution) instead of
-    // randomBytes[i] % chars.length which creates a modulo bias and slightly
-    // favors the first chars in the pool.
+    // 安全：使用crypto.randomInt（均匀分布）而不是
+    // randomBytes[i] % chars.length，后者会产生模运算偏差，
+    // 稍微偏向字符池中前面的字符。
     let password = ''
     const charLen = chars.length
     for (let i = 0; i < safeLength; i++) {
@@ -1593,8 +1778,8 @@ async function createWindow() {
     try {
       const data = await loadConfig('passwords.json')
       const result = data || { groups: [], passwords: [] }
-      // loadConfig() already decrypts password fields for passwords.json
-      // Additional decryptPasswordData call is a safety no-op for entries without __encrypted__ flag
+      // loadConfig()已经对passwords.json解密密码字段
+      // 对没有__encrypted__标记的条目调用decryptPasswordData是安全的无操作
       if (Array.isArray(result.passwords)) {
         result.passwords = result.passwords.map((p: any) => decryptPasswordData(p))
       }
@@ -1603,14 +1788,14 @@ async function createWindow() {
       }
       return result
     } catch (error) {
-      logger.error('get-passwords: failed:', error instanceof Error ? error.message : String(error))
+      logger.error('get-passwords: 获取密码失败:', error instanceof Error ? error.message : String(error))
       return { groups: [], passwords: [] }
     }
   })
   
   ipcMain.handle('save-password', async (_, passwordData: any) => {
     try {
-      // loadConfig() auto-decrypts passwords.json so we can safely modify entries
+      // loadConfig()自动解密passwords.json，所以我们可以安全地修改条目
       const existingData = await loadConfig('passwords.json') || { groups: [], passwords: [] }
       const now = new Date().toISOString()
       if (passwordData.id) {
@@ -1630,18 +1815,18 @@ async function createWindow() {
           updatedAt: now
         })
       }
-      // saveConfig() auto-encrypts passwords.json before writing to disk
+      // saveConfig()保存前自动加密passwords.json
       await saveConfig('passwords.json', existingData)
       return true
     } catch (error) {
-      logger.error('save-password: failed:', error instanceof Error ? error.message : String(error))
+      logger.error('save-password: 保存密码失败:', error instanceof Error ? error.message : String(error))
       return false
     }
   })
   
   ipcMain.handle('delete-password', async (_, id: string) => {
     try {
-      // loadConfig() auto-decrypts; safeConfig() will re-encrypt before saving
+      // loadConfig()自动解密；saveConfig()保存前会重新加密
       const existingData = await loadConfig('passwords.json') || { groups: [], passwords: [] }
       existingData.passwords = existingData.passwords.filter((p: any) => p.id !== id)
       if (Array.isArray(existingData.items)) {
@@ -1650,7 +1835,7 @@ async function createWindow() {
       await saveConfig('passwords.json', existingData)
       return true
     } catch (error) {
-      logger.error('delete-password: failed:', error instanceof Error ? error.message : String(error))
+      logger.error('delete-password: 删除密码失败:', error instanceof Error ? error.message : String(error))
       return false
     }
   })
@@ -1713,10 +1898,9 @@ async function createWindow() {
       }
 
       try {
-        // SECURITY FIX: instead of embedding the user path into the PowerShell
-        // script via string interpolation (which could allow script injection),
-        // we encode the path to Base64 in Node.js and pass it as a separate arg
-        // so the PowerShell script only receives a fixed Base64 string via $args[0]
+        // 安全修复：不是通过字符串插值将用户路径嵌入PowerShell脚本（这可能允许脚本注入），
+        // 而是在Node.js中将路径编码为Base64，并作为单独的参数传递，
+        // 因此PowerShell脚本只通过$args[0]接收一个固定的Base64字符串
         const pathBase64 = Buffer.from(trimmedPath, 'utf-8').toString('base64')
 
         const psScript = `
@@ -1896,6 +2080,13 @@ async function createWindow() {
   })
 }
 
+/**
+ * 递归搜索目录中匹配指定模式的文件
+ * @param directory - 要搜索的目录路径
+ * @param pattern - 文件名匹配模式（不区分大小写的子字符串匹配）
+ * @param depth - 当前递归深度（用于防止无限递归，最大深度10层）
+ * @returns 匹配的文件路径数组
+ */
 async function searchFilesRecursive(directory: string, pattern: string, depth = 0): Promise<string[]> {
   const MAX_DEPTH = 10
   if (depth > MAX_DEPTH) return []

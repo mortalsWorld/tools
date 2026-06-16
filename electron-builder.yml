@@ -15,6 +15,14 @@ win:
     - nsis
     - portable
   icon: public/icon.ico
+  nsis:
+    oneClick: false
+    perMachine: false
+    allowToChangeInstallationDirectory: true
+    createDesktopShortcut: true
+    createStartMenuShortcut: true
+    installerIcon: public/icon.ico
+    uninstallerIcon: public/icon.ico
 mac:
   target:
     - dmg

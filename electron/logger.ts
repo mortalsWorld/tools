@@ -24,6 +24,12 @@ const DEFAULT_CONFIG: LoggerConfig = {
 
 let config: LoggerConfig = { ...DEFAULT_CONFIG }
 
+/**
+ * 初始化日志记录器
+ * @param logDir - 日志文件存储目录
+ * @param retentionDays - 日志保留天数
+ * @param level - 日志等级
+ */
 export const initLogger = (logDir: string, retentionDays: number = 7, level: LogLevel = 'INFO') => {
   config = { logDir, retentionDays, level }
   
@@ -34,11 +40,18 @@ export const initLogger = (logDir: string, retentionDays: number = 7, level: Log
   cleanupOldLogs()
 }
 
-// 更新日志等级
+/**
+ * 更新日志等级
+ * @param level - 新的日志等级
+ */
 export const setLogLevel = (level: LogLevel) => {
   config.level = level
 }
 
+/**
+ * 获取今天的日期字符串（格式：YYYY-MM-DD）
+ * @returns 日期字符串
+ */
 const getTodayString = () => {
   const now = new Date()
   const year = now.getFullYear()
@@ -47,10 +60,18 @@ const getTodayString = () => {
   return `${year}-${month}-${day}`
 }
 
+/**
+ * 获取日志文件路径
+ * @returns 日志文件完整路径
+ */
 const getLogFilePath = () => {
   return path.join(config.logDir, `${getTodayString()}.log`)
 }
 
+/**
+ * 获取时间戳字符串（格式：HH:MM:SS.ms）
+ * @returns 时间戳字符串
+ */
 const getTimestamp = () => {
   const now = new Date()
   const hours = String(now.getHours()).padStart(2, '0')
@@ -60,6 +81,12 @@ const getTimestamp = () => {
   return `${hours}:${minutes}:${seconds}.${ms}`
 }
 
+/**
+ * 通用日志记录函数
+ * @param level - 日志等级
+ * @param message - 日志消息
+ * @param args - 附加参数（会被序列化为JSON）
+ */
 const log = (level: LogLevel, message: string, ...args: any[]) => {
   // 检查日志等级，如果当前日志等级低于配置的等级，则不输出
   if (LEVEL_PRIORITY[level] < LEVEL_PRIORITY[config.level]) {
@@ -79,7 +106,7 @@ const log = (level: LogLevel, message: string, ...args: any[]) => {
       }).join(' ')
       logMessage += `\n${extra}`
     } catch (e) {
-      logMessage += `\nError serializing args: ${e}`
+      logMessage += `\n参数序列化错误: ${e}`
     }
   }
   
@@ -91,10 +118,13 @@ const log = (level: LogLevel, message: string, ...args: any[]) => {
     }
     fs.appendFileSync(getLogFilePath(), logMessage + '\n')
   } catch (e) {
-    console.error('Failed to write log to file:', e)
+    console.error('写入日志文件失败:', e)
   }
 }
 
+/**
+ * 清理过期日志文件
+ */
 const cleanupOldLogs = () => {
   try {
     if (!fs.existsSync(config.logDir)) {
@@ -112,12 +142,12 @@ const cleanupOldLogs = () => {
         if (fileDate < cutoffDate) {
           const filePath = path.join(config.logDir, file)
           fs.unlinkSync(filePath)
-          console.log(`Cleaned up old log file: ${file}`)
+          console.log(`清理过期日志文件: ${file}`)
         }
       }
     }
   } catch (e) {
-    console.error('Failed to cleanup old logs:', e)
+    console.error('清理过期日志失败:', e)
   }
 }
 
