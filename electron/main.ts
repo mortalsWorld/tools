@@ -71,23 +71,40 @@ const encryptSensitiveData = (data: string): string => {
 
 const decryptSensitiveData = (data: string): string => {
   if (!data) return ''
+  // If the data doesn't look like base64, return it as-is (backward compatibility with plaintext)
+  // SafeStorage encrypted data looks like a long base64 string; base64 fallback starts with '__b64__'
+  if (!data.startsWith('__b64__')) {
+    // Check if it might be plaintext (non-base64 characters or short length)
+    // If it doesn't match base64 pattern, assume it's old plaintext data
+    const looksLikeBase64 = /^[A-Za-z0-9+/=]{20,}$/.test(data)
+    if (!looksLikeBase64) {
+      return data  // Plaintext from old config - return as-is
+    }
+  }
   try {
     if (data.startsWith('__b64__')) {
       return Buffer.from(data.slice(7), 'base64').toString('utf-8')
     }
     if (safeStorage.isEncryptionAvailable()) {
       const buffer = Buffer.from(data, 'base64')
-      return safeStorage.decryptString(buffer)
+      const decrypted = safeStorage.decryptString(buffer)
+      return decrypted
     }
   } catch (e) {
-    logger.warn('decryptSensitiveData: decryption failed:', e instanceof Error ? e.message : String(e))
+    logger.warn('decryptSensitiveData: decryption failed, returning original:', e instanceof Error ? e.message : String(e))
+    // Fall through - return original data unchanged (might be plaintext from old config)
   }
-  return ''
+  // As a last resort, return the original data unchanged
+  // This handles: safeStorage unavailable but data looks base64, or encryption errors
+  return data
 }
 
 // Encrypt password fields in a password data structure
+// If the data already has __encrypted__ flag, it's returned unchanged (prevent double-encryption)
 const encryptPasswordData = (data: any): any => {
   if (!data) return data
+  // Don't re-encrypt already-encrypted entries
+  if (data.__encrypted__) return data
   const result: any = {}
   for (const [key, value] of Object.entries(data)) {
     if (key === 'password' && typeof value === 'string' && value.length > 0) {
@@ -102,6 +119,8 @@ const encryptPasswordData = (data: any): any => {
 
 const decryptPasswordData = (data: any): any => {
   if (!data) return data
+  // No __encrypted__ flag means this is plaintext (old format or never encrypted)
+  // Return unchanged for backward compatibility
   if (!data.__encrypted__) return data
   const result: any = { ...data }
   if (typeof result.password === 'string') {
@@ -240,9 +259,17 @@ async function loadConfig(fileName: string) {
     await ensureConfigDir()
     const filePath = path.join(CONFIG_PATH, fileName)
     const content = await readFile(filePath, 'utf-8')
-    return JSON.parse(content)
+    const data = JSON.parse(content)
+    // Decrypt password fields in passwords.json
+    // Handles both old { passwords: [] } and new { items: [] } formats
+    // Plaintext entries (without __encrypted__ flag) are returned unchanged for backward compatibility
+    if (fileName === 'passwords.json' && data) {
+      const decrypted = decryptPasswordFieldsInConfig(data)
+      return decrypted
+    }
+    return data
   } catch (error) {
-    console.error(`Error loading config ${fileName}:`, error)
+    logger.error(`loadConfig: failed to load ${fileName}:`, error instanceof Error ? error.message : String(error))
     return null
   }
 }
@@ -754,8 +781,16 @@ async function saveConfig(fileName: string, data: any) {
       await createBackup(fileName)
     }
     
+    // Encrypt password fields in passwords.json before writing to disk
+    // Handles both old { passwords: [] } and new { items: [] } formats
+    // Plaintext passwords are encrypted; already-encrypted entries (with __encrypted__) are skipped
+    let dataToSave = data
+    if (fileName === 'passwords.json' && data) {
+      dataToSave = encryptPasswordFieldsInConfig(data)
+    }
+    
     const filePath = path.join(CONFIG_PATH, fileName)
-    const jsonContent = JSON.stringify(data, null, 2)
+    const jsonContent = JSON.stringify(dataToSave, null, 2)
     logger.debug(`[saveConfig] 完整文件路径: ${filePath}`)
     logger.debug(`[saveConfig] 配置内容长度: ${jsonContent.length} 字符`)
     await writeFile(filePath, jsonContent, 'utf-8')
@@ -905,6 +940,17 @@ async function createWindow() {
   initLogger(logDir, 7)
   logger.info(`[MAIN] APP_DIR: ${APP_DIR}`)
   logger.info(`[MAIN] CONFIG_PATH: ${CONFIG_PATH}`)
+  
+  // Check safeStorage availability for password encryption
+  try {
+    if (safeStorage.isEncryptionAvailable()) {
+      logger.info('[MAIN] safeStorage: encryption is available, passwords will be encrypted with system-level keychain')
+    } else {
+      logger.warn('[MAIN] safeStorage: encryption is NOT available on this system, passwords will use base64 obfuscation only')
+    }
+  } catch (e) {
+    logger.warn('[MAIN] safeStorage: check failed:', e instanceof Error ? e.message : String(e))
+  }
   
   await ensureConfigDir()
   await loadAppConfig()
@@ -1106,21 +1152,12 @@ async function createWindow() {
   })
   
   ipcMain.handle('load-config', async (_, fileName: string) => {
-    const data = await loadConfig(fileName)
-    // For passwords.json, decrypt password fields before returning to the UI.
-    // Plaintext entries (without __encrypted__ flag) pass through unchanged,
-    // so old configs are fully backward-compatible.
-    if (fileName === 'passwords.json' && data) {
-      return decryptPasswordFieldsInConfig(data)
-    }
-    return data
+    // loadConfig() handles password decryption for passwords.json automatically
+    return await loadConfig(fileName)
   })
 
   ipcMain.handle('save-config', async (_, fileName: string, data: any) => {
-    // For passwords.json, encrypt password fields before writing to disk.
-    if (fileName === 'passwords.json' && data) {
-      data = encryptPasswordFieldsInConfig(data)
-    }
+    // saveConfig() handles password encryption for passwords.json automatically
     await saveConfig(fileName, data)
     return true
   })
@@ -1556,9 +1593,13 @@ async function createWindow() {
     try {
       const data = await loadConfig('passwords.json')
       const result = data || { groups: [], passwords: [] }
-      // Decrypt password fields before sending to renderer (they never live decrypted on disk)
+      // loadConfig() already decrypts password fields for passwords.json
+      // Additional decryptPasswordData call is a safety no-op for entries without __encrypted__ flag
       if (Array.isArray(result.passwords)) {
         result.passwords = result.passwords.map((p: any) => decryptPasswordData(p))
+      }
+      if (Array.isArray(result.items)) {
+        result.items = result.items.map((p: any) => decryptPasswordData(p))
       }
       return result
     } catch (error) {
@@ -1569,29 +1610,27 @@ async function createWindow() {
   
   ipcMain.handle('save-password', async (_, passwordData: any) => {
     try {
+      // loadConfig() auto-decrypts passwords.json so we can safely modify entries
       const existingData = await loadConfig('passwords.json') || { groups: [], passwords: [] }
       const now = new Date().toISOString()
       if (passwordData.id) {
         const index = existingData.passwords.findIndex((p: any) => p.id === passwordData.id)
         if (index !== -1) {
-          // Encrypt the password field before writing to disk
-          const encrypted = encryptPasswordData({
+          existingData.passwords[index] = {
             ...existingData.passwords[index],
             ...passwordData,
             updatedAt: now
-          })
-          existingData.passwords[index] = encrypted
+          }
         }
       } else {
-        // Encrypt the password field before writing to disk
-        const encrypted = encryptPasswordData({
+        existingData.passwords.push({
           ...passwordData,
           id: crypto.randomUUID(),
           createdAt: now,
           updatedAt: now
         })
-        existingData.passwords.push(encrypted)
       }
+      // saveConfig() auto-encrypts passwords.json before writing to disk
       await saveConfig('passwords.json', existingData)
       return true
     } catch (error) {
@@ -1602,12 +1641,16 @@ async function createWindow() {
   
   ipcMain.handle('delete-password', async (_, id: string) => {
     try {
+      // loadConfig() auto-decrypts; safeConfig() will re-encrypt before saving
       const existingData = await loadConfig('passwords.json') || { groups: [], passwords: [] }
       existingData.passwords = existingData.passwords.filter((p: any) => p.id !== id)
+      if (Array.isArray(existingData.items)) {
+        existingData.items = existingData.items.filter((p: any) => p.id !== id)
+      }
       await saveConfig('passwords.json', existingData)
       return true
     } catch (error) {
-      console.error('Error deleting password:', error)
+      logger.error('delete-password: failed:', error instanceof Error ? error.message : String(error))
       return false
     }
   })
