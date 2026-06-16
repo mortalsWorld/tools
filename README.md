@@ -131,8 +131,16 @@ npm run build
 ```
 
 构建完成后，安装包位于 `release/` 目录下：
-- `DevTools Setup 1.3.0.exe` - NSIS 安装包（约 101 MB）
-- `DevTools 1.3.0.exe` - 便携版（约 101 MB）
+- `DevTools Setup 1.3.0.exe` - NSIS 安装包（约 100 MB）
+- `DevTools 1.3.0.exe` - 便携版（约 100 MB）
+
+### 安装说明
+
+应用安装时支持自定义安装目录：
+- **非一键安装模式** - 用户可以选择安装位置
+- **每用户安装** - 安装到用户目录，避免权限问题
+- **创建桌面快捷方式** - 自动创建桌面快捷方式
+- **创建开始菜单** - 自动创建开始菜单项
 
 ### 打包体积优化
 
@@ -143,15 +151,47 @@ npm run build
 
 ## 配置持久化
 
-应用配置存储在用户数据目录下：
-- **Windows**: `%APPDATA%/toolbox/config/`
-- **macOS**: `~/Library/Application Support/toolbox/config/`
-- **Linux**: `~/.config/toolbox/config/`
+### 配置存储位置
 
-各工具的配置以 JSON 格式存储：
+应用配置存储在**安装目录**下的 `config/` 子目录：
+
+```
+安装目录/
+├── DevTools.exe           # 应用程序
+├── config/                # 配置文件目录
+│   ├── app-config.json    # 应用配置
+│   ├── shortcuts.json     # 文件快速启动配置
+│   ├── websites.json       # 网页快速打开配置
+│   └── passwords.json     # 密码管理配置（已加密）
+└── logs/                  # 日志文件目录
+```
+
+**重要**：配置文件随安装目录移动，卸载应用不会删除配置（需手动删除安装目录）。
+
+### 旧配置迁移
+
+首次启动时，如果检测到旧版本配置（位于用户数据目录），会自动迁移到新位置：
+- **Windows**: `%APPDATA%/toolbox/config/` → `安装目录/config/`
+- **macOS**: `~/Library/Application Support/toolbox/config/` → `安装目录/config/`
+
+### 备份与恢复
+
+应用支持自动备份配置：
+- **自动备份** - 每次保存配置前自动创建备份
+- **定时备份** - 可设置定时自动备份
+- **备份保留数量** - 默认保留 5 个备份
+- **手动备份** - 支持手动创建完整备份
+- **恢复备份** - 支持从备份列表恢复配置
+- **导入外部备份** - 支持导入外部备份目录
+
+备份存储在 `config/backups/` 目录下。
+
+### 配置文件说明
+
+- `app-config.json` - 应用设置（主题、快捷键、备份配置等）
 - `shortcuts.json` - 文件快速启动配置
 - `websites.json` - 网页快速打开配置
-- `passwords.json` - 密码管理配置（**已加密**）
+- `passwords.json` - 密码管理配置（**已加密存储**）
 
 ## 开发指南
 
