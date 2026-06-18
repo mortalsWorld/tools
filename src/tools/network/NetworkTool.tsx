@@ -26,17 +26,31 @@ export const NetworkTool: React.FC = () => {
   const fetchIPInfo = async () => {
     setLoading(true);
     try {
-      const response = await fetch('https://ipinfo.io/json');
-      if (response.ok) {
-        const data = await response.json();
-        setIpInfo(data);
-        message.success('获取成功');
+      // 通过主进程发起HTTP请求，避免CORS限制
+      const response = await (window as any).electronAPI.httpRequest({
+        url: 'https://ipinfo.io/json',
+        method: 'GET',
+        timeoutMs: 15000,
+      });
+
+      if (response.status >= 200 && response.status < 300 && response.body) {
+        // 主进程返回的body已经是JSON格式字符串，尝试解析
+        try {
+          const data = typeof response.body === 'string'
+            ? JSON.parse(response.body)
+            : response.body;
+          setIpInfo(data);
+          message.success('获取成功');
+        } catch (parseError) {
+          console.error('解析响应失败:', parseError);
+          message.error('解析响应失败');
+        }
       } else {
-        message.error('获取失败');
+        message.error(`获取失败，状态码: ${response.status}`);
       }
     } catch (error) {
       console.error('Failed to fetch IP info:', error);
-      message.error('网络请求失败，请检查网络连接');
+      message.error(`网络请求失败: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setLoading(false);
     }
