@@ -67,65 +67,173 @@ async function sendHttpRequestInMain(
     try {
       const targetUrl = new URL(options.url)
       const isHttps = targetUrl.protocol === 'https:'
-      const client = isHttps ? https : http
-
-      // 代理处理
-      let requestOptions: http.RequestOptions | https.RequestOptions = {
-        method: options.method,
-        headers: options.headers || {},
-        timeout: options.timeoutMs || 30000,
-      }
 
       // 如果配置了代理，则通过代理发起请求
       if (options.proxy && options.proxy.url) {
         const proxyUrl = new URL(options.proxy.url)
-        requestOptions = {
-          ...requestOptions,
-          hostname: proxyUrl.hostname,
-          port: proxyUrl.port,
-          path: options.url,  // HTTP 代理使用完整 URL 作为 path
-          headers: {
-            ...requestOptions.headers,
-            Host: targetUrl.host,
-          },
+        
+        // HTTPS 通过代理需要先建立 CONNECT 隧道
+        if (isHttps) {
+          connectProxyTunnel(proxyUrl, targetUrl, options, startTime, resolve, reject)
+        } else {
+          // HTTP 通过代理直接发送请求
+          sendHttpViaProxy(proxyUrl, targetUrl, options, startTime, resolve, reject)
         }
-
-        // 代理 Basic 认证支持
-        if (options.proxy.auth) {
-          const authToken = Buffer.from(
-            `${options.proxy.auth.username}:${options.proxy.auth.password}`
-          ).toString('base64')
-          ;(requestOptions.headers as Record<string, string>)[
-            'Proxy-Authorization'
-          ] = `Basic ${authToken}`
-        }
-
-        // 使用 http 客户端发送代理请求（代理连接使用 HTTP）
-        const req = http.request(requestOptions as http.RequestOptions, (res) => {
-          handleResponse(res, startTime, resolve, reject)
-        })
-
-        // 设置请求超时、错误处理和发送请求体
-        setupRequest(req, options.body, reject)
       } else {
         // 直接连接目标服务器
-        requestOptions = {
-          ...requestOptions,
-          hostname: targetUrl.hostname,
-          port: targetUrl.port || (isHttps ? 443 : 80),
-          path: targetUrl.pathname + targetUrl.search,
-        }
-
-        const req = client.request(requestOptions, (res) => {
-          handleResponse(res, startTime, resolve, reject)
-        })
-
-        setupRequest(req, options.body, reject)
+        sendDirectRequest(targetUrl, options, startTime, resolve, reject)
       }
     } catch (err) {
       reject(err)
     }
   })
+}
+
+/**
+ * 通过 HTTP 代理直接发送 HTTP 请求（非 HTTPS）
+ * @param proxyUrl - 代理服务器地址
+ * @param targetUrl - 目标服务器地址
+ * @param options - 请求配置
+ * @param startTime - 请求开始时间
+ * @param resolve - Promise 成功回调
+ * @param reject - Promise 失败回调
+ */
+function sendHttpViaProxy(
+  proxyUrl: URL,
+  targetUrl: URL,
+  options: HttpRequestOptions,
+  startTime: number,
+  resolve: (value: HttpResponseResult) => void,
+  reject: (reason: any) => void
+) {
+  const requestOptions: http.RequestOptions = {
+    method: options.method,
+    hostname: proxyUrl.hostname,
+    port: proxyUrl.port ? parseInt(proxyUrl.port) : 80,
+    path: options.url,
+    headers: {
+      ...(options.headers || {}),
+      Host: targetUrl.host,
+    },
+    timeout: options.timeoutMs || 30000,
+  }
+
+  // 代理 Basic 认证支持
+  if (options.proxy?.auth) {
+    const authToken = Buffer.from(
+      `${options.proxy.auth.username}:${options.proxy.auth.password}`
+    ).toString('base64')
+    ;(requestOptions.headers as Record<string, string>)['Proxy-Authorization'] = `Basic ${authToken}`
+  }
+
+  const req = http.request(requestOptions, (res) => {
+    handleResponse(res, startTime, resolve, reject)
+  })
+
+  setupRequest(req, options.body, reject)
+}
+
+/**
+ * 通过 HTTP 代理建立 CONNECT 隧道，然后发送 HTTPS 请求
+ * @param proxyUrl - 代理服务器地址
+ * @param targetUrl - 目标服务器地址
+ * @param options - 请求配置
+ * @param startTime - 请求开始时间
+ * @param resolve - Promise 成功回调
+ * @param reject - Promise 失败回调
+ */
+function connectProxyTunnel(
+  proxyUrl: URL,
+  targetUrl: URL,
+  options: HttpRequestOptions,
+  startTime: number,
+  resolve: (value: HttpResponseResult) => void,
+  reject: (reason: any) => void
+) {
+  const proxyOptions: http.RequestOptions = {
+    method: 'CONNECT',
+    hostname: proxyUrl.hostname,
+    port: proxyUrl.port ? parseInt(proxyUrl.port) : 80,
+    path: `${targetUrl.hostname}:${targetUrl.port || 443}`,
+    headers: {},
+    timeout: options.timeoutMs || 30000,
+  }
+
+  // 代理 Basic 认证支持
+  if (options.proxy?.auth) {
+    const authToken = Buffer.from(
+      `${options.proxy.auth.username}:${options.proxy.auth.password}`
+    ).toString('base64')
+    ;(proxyOptions.headers as Record<string, string>)['Proxy-Authorization'] = `Basic ${authToken}`
+  }
+
+  const tunnelReq = http.request(proxyOptions)
+
+  tunnelReq.on('error', reject)
+
+  tunnelReq.on('timeout', () => {
+    tunnelReq.destroy(new Error('代理连接超时'))
+  })
+
+  tunnelReq.on('connect', (res, socket) => {
+    if (res.statusCode !== 200) {
+      socket.destroy()
+      reject(new Error(`代理连接失败，状态码: ${res.statusCode}`))
+      return
+    }
+
+    // 隧道建立成功，发送 HTTPS 请求
+    const httpsOptions: https.RequestOptions = {
+      hostname: targetUrl.hostname,
+      port: targetUrl.port ? parseInt(targetUrl.port) : 443,
+      path: targetUrl.pathname + targetUrl.search,
+      method: options.method,
+      headers: options.headers || {},
+      agent: new https.Agent({ socket }),
+    }
+
+    const req = https.request(httpsOptions, (httpsRes) => {
+      handleResponse(httpsRes, startTime, resolve, reject)
+    })
+
+    setupRequest(req, options.body, reject)
+  })
+
+  tunnelReq.end()
+}
+
+/**
+ * 直接连接目标服务器发送请求（不经过代理）
+ * @param targetUrl - 目标服务器地址
+ * @param options - 请求配置
+ * @param startTime - 请求开始时间
+ * @param resolve - Promise 成功回调
+ * @param reject - Promise 失败回调
+ */
+function sendDirectRequest(
+  targetUrl: URL,
+  options: HttpRequestOptions,
+  startTime: number,
+  resolve: (value: HttpResponseResult) => void,
+  reject: (reason: any) => void
+) {
+  const isHttps = targetUrl.protocol === 'https:'
+  const client = isHttps ? https : http
+
+  const requestOptions: http.RequestOptions | https.RequestOptions = {
+    method: options.method,
+    hostname: targetUrl.hostname,
+    port: targetUrl.port ? parseInt(targetUrl.port) : (isHttps ? 443 : 80),
+    path: targetUrl.pathname + targetUrl.search,
+    headers: options.headers || {},
+    timeout: options.timeoutMs || 30000,
+  }
+
+  const req = client.request(requestOptions, (res) => {
+    handleResponse(res, startTime, resolve, reject)
+  })
+
+  setupRequest(req, options.body, reject)
 }
 
 /**
