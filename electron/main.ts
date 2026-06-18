@@ -4,10 +4,210 @@ import fs from 'node:fs'
 import { promisify } from 'node:util'
 import { execFile } from 'child_process'
 import crypto from 'node:crypto'
+import http from 'node:http'
+import https from 'node:https'
+import { URL } from 'node:url'
 import { initLogger, logger } from './logger'
 
 const execFilePromise = promisify(execFile)
 const rmdir = promisify(fs.rmdir)
+
+// ============================================================================
+// HTTP 请求函数（在主进程中发起请求，不受浏览器 CORS 限制）
+// ============================================================================
+
+/**
+ * HTTP 请求选项类型定义
+ * @property url - 请求的完整 URL
+ * @property method - HTTP 请求方法
+ * @property headers - 请求头对象
+ * @property body - 请求体内容（可为字符串或表单数据）
+ * @property timeoutMs - 超时时间，单位为毫秒
+ * @property proxy - 代理配置对象，包含地址和认证信息
+ */
+interface HttpRequestOptions {
+  url: string
+  method: string
+  headers?: Record<string, string>
+  body?: string
+  timeoutMs?: number
+  proxy?: {
+    url: string
+    auth?: { username: string; password: string }
+  }
+}
+
+/**
+ * HTTP 响应结果类型定义
+ * @property status - HTTP 状态码
+ * @property statusText - 状态描述文本
+ * @property headers - 响应头对象
+ * @property body - 响应体内容
+ * @property duration - 请求耗时，单位为毫秒
+ */
+interface HttpResponseResult {
+  status: number
+  statusText: string
+  headers: Record<string, string>
+  body: string
+  duration: number
+}
+
+/**
+ * 在主进程中发起 HTTP 请求
+ * @param options - 请求配置选项
+ * @returns Promise 包含响应数据或抛出错误
+ */
+async function sendHttpRequestInMain(
+  options: HttpRequestOptions
+): Promise<HttpResponseResult> {
+  const startTime = Date.now()
+
+  return new Promise((resolve, reject) => {
+    try {
+      const targetUrl = new URL(options.url)
+      const isHttps = targetUrl.protocol === 'https:'
+      const client = isHttps ? https : http
+
+      // 代理处理
+      let requestOptions: http.RequestOptions | https.RequestOptions = {
+        method: options.method,
+        headers: options.headers || {},
+        timeout: options.timeoutMs || 30000,
+      }
+
+      // 如果配置了代理，则通过代理发起请求
+      if (options.proxy && options.proxy.url) {
+        const proxyUrl = new URL(options.proxy.url)
+        requestOptions = {
+          ...requestOptions,
+          hostname: proxyUrl.hostname,
+          port: proxyUrl.port,
+          path: options.url,  // HTTP 代理使用完整 URL 作为 path
+          headers: {
+            ...requestOptions.headers,
+            Host: targetUrl.host,
+          },
+        }
+
+        // 代理 Basic 认证支持
+        if (options.proxy.auth) {
+          const authToken = Buffer.from(
+            `${options.proxy.auth.username}:${options.proxy.auth.password}`
+          ).toString('base64')
+          ;(requestOptions.headers as Record<string, string>)[
+            'Proxy-Authorization'
+          ] = `Basic ${authToken}`
+        }
+
+        // 使用 http 客户端发送代理请求（代理连接使用 HTTP）
+        const req = http.request(requestOptions as http.RequestOptions, (res) => {
+          handleResponse(res, startTime, resolve, reject)
+        })
+
+        // 设置请求超时、错误处理和发送请求体
+        setupRequest(req, options.body, reject)
+      } else {
+        // 直接连接目标服务器
+        requestOptions = {
+          ...requestOptions,
+          hostname: targetUrl.hostname,
+          port: targetUrl.port || (isHttps ? 443 : 80),
+          path: targetUrl.pathname + targetUrl.search,
+        }
+
+        const req = client.request(requestOptions, (res) => {
+          handleResponse(res, startTime, resolve, reject)
+        })
+
+        setupRequest(req, options.body, reject)
+      }
+    } catch (err) {
+      reject(err)
+    }
+  })
+}
+
+/**
+ * 处理 HTTP 响应：收集响应数据、解析响应头
+ * @param res - Node.js HTTP 响应对象
+ * @param startTime - 请求开始时间戳（用于计算耗时）
+ * @param resolve - Promise 成功回调
+ * @param reject - Promise 失败回调
+ */
+function handleResponse(
+  res: http.IncomingMessage,
+  startTime: number,
+  resolve: (value: HttpResponseResult) => void,
+  reject: (reason: any) => void
+) {
+  const chunks: Buffer[] = []
+
+  // 收集响应数据
+  res.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+
+  // 响应接收完成时，拼接数据、尝试 JSON 格式化、组装响应结果
+  res.on('end', () => {
+    const bodyBuffer = Buffer.concat(chunks)
+    let bodyText = bodyBuffer.toString('utf8')
+
+    // 尝试将 JSON 响应格式化，提升可读性
+    try {
+      const contentType = res.headers['content-type'] || ''
+      if (contentType.includes('application/json') || bodyText.trim().startsWith('{') || bodyText.trim().startsWith('[')) {
+        const parsed = JSON.parse(bodyText)
+        bodyText = JSON.stringify(parsed, null, 2)
+      }
+    } catch {
+      // 非 JSON 内容，保留原始文本
+    }
+
+    // 将响应头数组转为对象
+    const headers: Record<string, string> = {}
+    for (const [key, value] of Object.entries(res.headers)) {
+      if (Array.isArray(value)) {
+        headers[key] = value.join(', ')
+      } else if (value !== undefined) {
+        headers[key] = value
+      }
+    }
+
+    // 组装并返回最终响应
+    resolve({
+      status: res.statusCode || 0,
+      statusText: res.statusMessage || '',
+      headers,
+      body: bodyText,
+      duration: Date.now() - startTime,
+    })
+  })
+
+  res.on('error', reject)
+}
+
+/**
+ * 配置 HTTP 请求：超时、错误处理、写入请求体
+ * @param req - Node.js 请求对象
+ * @param body - 请求体内容（可为字符串）
+ * @param reject - Promise 失败回调
+ */
+function setupRequest(
+  req: http.ClientRequest,
+  body: string | undefined,
+  reject: (reason: any) => void
+) {
+  req.on('timeout', () => {
+    req.destroy(new Error('请求超时'))
+  })
+
+  req.on('error', reject)
+
+  // 写入请求体并结束请求
+  if (body) {
+    req.write(body)
+  }
+  req.end()
+}
 
 // ============================================================================
 // 安全辅助函数
@@ -1242,6 +1442,19 @@ async function createWindow() {
   logger.setLevel(logLevel)
   logger.info(`日志等级已设置为: ${logLevel}`)
   
+  ipcMain.handle('http-request', async (_event, options: HttpRequestOptions) => {
+    logger.info(`http-request: 发起 ${options.method} ${options.url}`)
+    try {
+      const result = await sendHttpRequestInMain(options)
+      logger.info(`http-request: 请求成功，状态码 ${result.status}，耗时 ${result.duration}ms`)
+      return result
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      logger.error(`http-request: 请求失败: ${errorMsg}`)
+      throw err
+    }
+  })
+
   ipcMain.handle('select-directory', async () => {
     logger.info('select-directory: 用户点击选择目录按钮')
     try {

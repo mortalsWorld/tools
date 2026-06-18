@@ -8,6 +8,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('search-files', directory, pattern),
   openFile: (filePath: string) => ipcRenderer.invoke('open-file', filePath),
   openUrl: (url: string) => ipcRenderer.invoke('open-url', url),
+  // HTTP 请求（在主进程中发起，不受浏览器 CORS 限制）
+  httpRequest: (options: {
+    url: string
+    method: string
+    headers?: Record<string, string>
+    body?: string
+    timeoutMs?: number
+    proxy?: {
+      url: string
+      auth?: { username: string; password: string }
+    }
+  }) => ipcRenderer.invoke('http-request', options),
   loadConfig: (fileName: string) => ipcRenderer.invoke('load-config', fileName),
   saveConfig: (fileName: string, data: any) => ipcRenderer.invoke('save-config', fileName, data),
   // Process management

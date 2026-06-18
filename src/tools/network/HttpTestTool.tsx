@@ -176,68 +176,35 @@ export const HttpTestTool: React.FC = () => {
     setError('');
     setResponse(null);
 
-    const startTime = Date.now();
-
     try {
-      const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
-
       // 合并请求头
       const requestHeaders: Record<string, string> = {
         ...formatHeaders(),
         ...getAuthHeaders(),
       };
 
-      const options: RequestInit = {
+      // 构建主进程请求配置
+      const mainRequestOptions = {
+        url: requestUrl,
         method,
         headers: requestHeaders,
-        signal: controller.signal,
+        timeoutMs,
+        body: (method !== 'GET' && method !== 'HEAD' && body.trim()) ? getRequestBody() : undefined,
+        proxy: proxyEnabled && proxyUrl ? {
+          url: proxyUrl,
+          auth: proxyAuthEnabled && proxyUsername ? { username: proxyUsername, password: proxyPassword } : undefined,
+        } : undefined,
       };
 
-      if (method !== 'GET' && method !== 'HEAD' && body.trim()) {
-        options.body = getRequestBody();
-      }
-
-      // 处理代理
-      if (proxyEnabled && proxyUrl) {
-        // 注意：浏览器 fetch 不直接支持代理，需要通过主进程代理
-        // 这里暂时记录配置，实际代理需要 IPC 调用
-        (options as any)._proxyConfig = {
-          url: proxyUrl,
-          auth: proxyAuthEnabled ? { username: proxyUsername, password: proxyPassword } : null
-        };
-      }
-
-      const res = await fetch(requestUrl, options);
-
-      window.clearTimeout(timeoutId);
-
-      const responseHeaders: Record<string, string> = {};
-      res.headers.forEach((value, key) => {
-        responseHeaders[key] = value;
-      });
-
-      let responseBody = '';
-      try {
-        const text = await res.text();
-        try {
-          const parsed = JSON.parse(text);
-          responseBody = JSON.stringify(parsed, null, 2);
-        } catch {
-          responseBody = text;
-        }
-      } catch {
-        responseBody = '无法解析响应体';
-      }
-
-      const duration = Date.now() - startTime;
+      // 通过主进程发起 HTTP 请求，不受 CORS 限制
+      const res = await (window as any).electronAPI.httpRequest(mainRequestOptions);
 
       setResponse({
         status: res.status,
         statusText: res.statusText,
-        headers: responseHeaders,
-        body: responseBody,
-        duration,
+        headers: res.headers,
+        body: res.body,
+        duration: res.duration,
       });
 
       setHistory(prev => [{
@@ -246,23 +213,14 @@ export const HttpTestTool: React.FC = () => {
         url: requestUrl,
         status: res.status,
         time: new Date().toLocaleString(),
-        duration,
+        duration: res.duration,
       }, ...prev].slice(0, 50));
 
-      message.success(`请求成功，耗时 ${duration}ms`);
+      message.success(`请求成功，状态码 ${res.status}，耗时 ${res.duration}ms`);
     } catch (err: any) {
-      const duration = Date.now() - startTime;
-
-      if (err.name === 'AbortError') {
-        setError('请求超时');
-        message.error('请求超时');
-      } else if (err.name === 'TypeError') {
-        setError(`网络错误: ${err.message}`);
-        message.error('网络错误，请检查网络连接');
-      } else {
-        setError(`请求失败: ${err.message}`);
-        message.error('请求失败');
-      }
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setError(errorMsg);
+      message.error(`请求失败: ${errorMsg}`);
 
       setHistory(prev => [{
         id: generateKey(),
@@ -270,7 +228,7 @@ export const HttpTestTool: React.FC = () => {
         url: requestUrl,
         status: 0,
         time: new Date().toLocaleString(),
-        duration,
+        duration: 0,
       }, ...prev].slice(0, 50));
     } finally {
       setLoading(false);
