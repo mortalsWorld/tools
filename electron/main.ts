@@ -1652,8 +1652,6 @@ async function createWindow() {
           label: '退出',
           accelerator: 'Ctrl+Q',
           click: () => {
-            // 如果启用了最小化到托盘，则退出应用；否则也退出应用
-            // （最小化到托盘时，只有点击关闭按钮才会最小化，菜单退出直接退出）
             app.quit()
           }
         }
@@ -1662,32 +1660,32 @@ async function createWindow() {
     {
       label: '编辑',
       submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
+        { label: '撤销', role: 'undo' },
+        { label: '重做', role: 'redo' },
         { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' }
+        { label: '剪切', role: 'cut' },
+        { label: '复制', role: 'copy' },
+        { label: '粘贴', role: 'paste' }
       ]
     },
     {
       label: '视图',
       submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
+        { label: '重新加载', role: 'reload' },
+        { label: '强制重新加载', role: 'forceReload' },
         { type: 'separator' },
-        { role: 'toggleDevTools' },
+        { label: '开发者工具', role: 'toggleDevTools' },
         { type: 'separator' },
-        { role: 'togglefullscreen' }
+        { label: '全屏', role: 'togglefullscreen' }
       ]
     },
     {
       label: '窗口',
       submenu: [
-        { role: 'minimize' },
-        { role: 'zoom' },
+        { label: '最小化', role: 'minimize' },
+        { label: '缩放', role: 'zoom' },
         { type: 'separator' },
-        { role: 'front' }
+        { label: '前置', role: 'front' }
       ]
     },
     {
@@ -1698,7 +1696,7 @@ async function createWindow() {
           click: () => {
             dialog.showMessageBox({
               title: '关于工具箱',
-              message: `工具箱 v1.0.0\n\n一个实用的工具集合应用\n\n技术栈：\n- Electron ${app.getVersion()}\n- React 19\n- TypeScript\n- Ant Design\n\n代码仓库：\nhttps://gitee.com/hongchenshijie/tools`
+              message: `工具箱 v${app.getVersion()}\n\n一个纯离线的通用工具集合，无需网络即可使用\n\n技术栈：\n- Electron ${process.versions.electron}\n- React 19\n- TypeScript 5.6\n- Ant Design 6.4\n- Vite 8.0\n\n代码仓库：\nhttps://gitee.com/hongchenshijie/tools`
             })
           }
         }
