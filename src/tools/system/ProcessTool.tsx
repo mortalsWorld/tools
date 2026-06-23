@@ -27,46 +27,6 @@ interface SystemInfo {
   }
 }
 
-declare global {
-  interface Window {
-    electronAPI: {
-      getProcesses: () => Promise<ProcessInfo[]>
-      getSystemInfo: () => Promise<SystemInfo>
-      killProcess: (pid: number) => Promise<{ success: boolean; error?: string }>
-      killProcesses: (pids: number[]) => Promise<{ success: boolean; errors: number[] }>
-      searchFileHandle: (filePath: string) => Promise<{ Id: number; ProcessName: string }[]>
-      searchDirectoryHandle: (directoryPath: string) => Promise<{ Id: number; ProcessName: string }[]>
-      getPasswords: () => Promise<any>
-      savePassword: (password: any) => Promise<boolean>
-      deletePassword: (id: string) => Promise<boolean>
-      generatePassword: (options: any) => Promise<string>
-      platform: string
-      selectDirectory: () => Promise<string>
-      selectFile: () => Promise<string>
-      searchFiles: (directory: string, pattern: string) => Promise<string[]>
-      openFile: (path: string) => Promise<void>
-      openUrl: (url: string) => Promise<void>
-      loadConfig: (fileName: string) => Promise<any>
-      saveConfig: (fileName: string, data: any) => Promise<boolean>
-      getAppConfig: () => Promise<any>
-      saveAppConfig: (config: any) => Promise<boolean>
-      getBackupSettings: () => Promise<{ backupEnabled: boolean, backupCount: number }>
-      saveBackupSettings: (settings: { backupEnabled: boolean, backupCount: number }) => Promise<boolean>
-      selectBackupDirectory: () => Promise<string | null>
-      getBackupDir: () => Promise<string | null>
-      createFullBackup: (note?: string) => Promise<any>
-      getBackupList: () => Promise<any[]>
-      deleteBackup: (backupId: string) => Promise<boolean>
-      restoreBackup: (backupId: string) => Promise<any>
-      importBackup: (backupPath: string) => Promise<any>
-      migrateConfigDir: (newDir: string, fullConfig?: any) => Promise<{ success: boolean, error?: string }>
-      selectIcon: () => Promise<{ path: string, base64: string } | null>
-      getFileIcon: (filePath: string) => Promise<{ base64: string }>
-      onShortcutTriggered: (callback: (toolId: string) => void) => () => void
-    }
-  }
-}
-
 const formatBytes = (bytes: number): string => {
   if (bytes === 0 || isNaN(bytes)) return '0 B'
   const k = 1024
