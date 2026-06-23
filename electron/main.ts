@@ -713,6 +713,9 @@ const DEFAULT_APP_CONFIG = {
 // 应用配置对象 - 初始化为默认值，避免异步加载前访问报错
 let appConfig: any = { ...DEFAULT_APP_CONFIG }
 
+// 退出标志位 - 防止 close 事件与 app.quit() 递归触发
+let isQuitting = false
+
 // 备份定时器
 let backupTimer: NodeJS.Timeout | null = null
 
@@ -1550,14 +1553,39 @@ async function createWindow() {
   })
 
   // 窗口关闭事件处理 - 根据设置决定是退出还是最小化
-  win.on('close', (event) => {
+  win.on('close', async (event) => {
+    if (isQuitting) {
+      // 已经确认退出，不拦截
+      return
+    }
     if (appConfig?.closeToMinimize) {
-      // 设置为最小化到托盘时，阻止关闭并隐藏窗口
+      // 设置为最小化到托盘时，弹出确认对话框
       event.preventDefault()
-      if (win) {
-        win.hide()
+      const choice = await dialog.showMessageBox(win!, {
+        type: 'question',
+        buttons: ['最小化到托盘', '退出程序', '取消'],
+        defaultId: 0,
+        cancelId: 2,
+        title: '关闭窗口',
+        message: '点击关闭按钮将最小化到托盘而不是退出程序',
+        detail: '选择"最小化到托盘"将隐藏窗口到系统托盘；选择"退出程序"将完全关闭应用；选择"取消"将保持窗口打开。'
+      })
+
+      if (choice.response === 0) {
+        // 最小化到托盘
+        if (win) {
+          win.hide()
+        }
+        logger.info('[MAIN] 窗口已最小化到托盘（用户确认）')
+      } else if (choice.response === 1) {
+        // 退出程序
+        logger.info('[MAIN] 用户选择退出程序')
+        isQuitting = true
+        app.quit()
+      } else {
+        // 取消，保持窗口打开
+        logger.info('[MAIN] 用户取消关闭')
       }
-      logger.info('[MAIN] 窗口已最小化到托盘（关闭按钮行为）')
     }
   })
 
