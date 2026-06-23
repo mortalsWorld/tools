@@ -1,6 +1,5 @@
 appId: com.devtools.app
 productName: DevTools
-license: LICENSE
 directories:
   output: release
 files:
