@@ -425,7 +425,19 @@ export const PasswordTool: React.FC = () => {
       {item.username && (
         <div style={{ fontSize: 12, color: '#666', marginBottom: 6, lineHeight: 1.5 }}>
           <span style={{ fontWeight: 500, color: '#999', display: 'block', marginBottom: 3 }}>用户名：</span>
-          <span style={{ wordBreak: 'break-all', fontFamily: 'Consolas, Monaco, monospace' }}>{item.username}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ wordBreak: 'break-all', fontFamily: 'Consolas, Monaco, monospace' }}>{item.username}</span>
+            <span
+              style={{ cursor: 'pointer', color: '#1890ff', fontSize: 11 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(item.username);
+                message.success('用户名已复制');
+              }}
+            >
+              <CopyOutlined /> 复制
+            </span>
+          </div>
         </div>
       )}
       {item.url && (
@@ -448,11 +460,23 @@ export const PasswordTool: React.FC = () => {
   ), [groups]);
 
   const renderPasswordSubtitle = useCallback((item: PasswordItem) => (
-    <span>
+    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
       <KeyOutlined />
       <span style={{ marginLeft: 4 }}>{item.username}</span>
+      {item.username && (
+        <span
+          style={{ cursor: 'pointer', color: token.colorPrimary, marginLeft: 4 }}
+          onClick={(e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(item.username);
+            message.success('用户名已复制');
+          }}
+        >
+          <CopyOutlined />
+        </span>
+      )}
     </span>
-  ), []);
+  ), [token.colorPrimary]);
 
   const renderPasswordDetails = useCallback((item: PasswordItem) => (
     <Space size="middle" style={{ fontSize: 11 }}>

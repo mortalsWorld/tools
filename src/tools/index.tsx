@@ -226,12 +226,12 @@ export const initializeTools = () => {
     component: ProcessTool
   })
 
-  // Security tools
+  // Quick tools - 密码管理移到快捷工具下
   toolRegistry.registerTool({
     id: 'password-tool',
     name: '密码管理',
     description: '密码生成与存储管理工具',
-    category: 'security',
+    category: 'tools',
     icon: <SafetyCertificateOutlined />,
     component: PasswordTool
   })

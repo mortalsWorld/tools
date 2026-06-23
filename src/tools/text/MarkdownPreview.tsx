@@ -4,8 +4,10 @@ import MarkdownIt from 'markdown-it';
 import { useTheme } from '../../context/ThemeContext';
 
 const { TextArea } = Input;
+// 安全配置：禁用原始 HTML 以防止 XSS 攻击
+// 用户输入的 Markdown 只会渲染为安全的文本格式
 const md = new MarkdownIt({
-  html: true,
+  html: false,  // 禁用原始 HTML - 安全最佳实践
   breaks: true,
   linkify: true,
 });
