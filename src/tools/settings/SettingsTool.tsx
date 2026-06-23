@@ -39,6 +39,7 @@ interface AppConfig {
   lastBackupTime: number
   windowShortcut: string
   logLevel: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR'
+  closeToMinimize: boolean  // 关闭按钮行为：true=最小化到托盘，false=退出程序
 }
 
 interface ToolbarItem {
@@ -109,7 +110,8 @@ export const SettingsTool: React.FC = () => {
           backupCount: config.backupCount || 7,
           backupDir: bDirValue,
           windowShortcut: config.windowShortcut || 'Ctrl+Shift+H',
-          logLevel: config.logLevel || 'INFO'
+          logLevel: config.logLevel || 'INFO',
+          closeToMinimize: config.closeToMinimize || false  // 关闭按钮行为
         })
 
         const allTools = toolRegistry.getTools()
@@ -472,7 +474,8 @@ export const SettingsTool: React.FC = () => {
       backupCount: values.backupCount ?? existingConfig?.backupCount ?? 7,
       lastBackupTime: existingConfig?.lastBackupTime || 0,
       windowShortcut: values.windowShortcut || existingConfig?.windowShortcut || 'Ctrl+Shift+H',
-      logLevel: values.logLevel || existingConfig?.logLevel || 'INFO'
+      logLevel: values.logLevel || existingConfig?.logLevel || 'INFO',
+      closeToMinimize: values.closeToMinimize ?? existingConfig?.closeToMinimize ?? false  // 关闭按钮行为
     }
     console.log('[SettingsTool] saveConfig: 准备保存的配置:', config)
     
@@ -521,7 +524,8 @@ export const SettingsTool: React.FC = () => {
         backupCount: values.backupCount ?? existingConfig?.backupCount ?? 7,
         lastBackupTime: existingConfig?.lastBackupTime || 0,
         windowShortcut: values.windowShortcut || existingConfig?.windowShortcut || 'Ctrl+Shift+H',
-        logLevel: values.logLevel || existingConfig?.logLevel || 'INFO'
+        logLevel: values.logLevel || existingConfig?.logLevel || 'INFO',
+        closeToMinimize: values.closeToMinimize ?? existingConfig?.closeToMinimize ?? false  // 关闭按钮行为
       }
       console.log('[SettingsTool] handleMigrate: 准备迁移的配置:', config)
       
@@ -842,6 +846,15 @@ export const SettingsTool: React.FC = () => {
               placeholder="例如: Ctrl+Shift+H"
               style={{ width: '100%' }}
             />
+          </Form.Item>
+
+          <Form.Item
+            label="关闭按钮行为"
+            name="closeToMinimize"
+            valuePropName="checked"
+            tooltip="开启后，点击关闭按钮将最小化到托盘而不是退出程序；菜单中的退出选项仍会退出程序"
+          >
+            <Switch checkedChildren="最小化到托盘" unCheckedChildren="退出程序" />
           </Form.Item>
           
           <Form.Item

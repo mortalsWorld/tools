@@ -35,6 +35,7 @@ interface HttpRequestOptions {
     url: string
     auth?: { username: string; password: string }
   }
+  useSystemProxy?: boolean  // 是否使用系统代理配置
 }
 
 /**
@@ -53,6 +54,84 @@ interface HttpResponseResult {
   duration: number
 }
 
+// ============================================================================
+// 系统代理配置获取函数
+// ============================================================================
+
+/**
+ * 获取 Windows 系统代理配置
+ * 通过 PowerShell 查询系统代理设置
+ * @returns 系统代理配置对象，包含 HTTP 和 HTTPS 代理地址
+ */
+async function getSystemProxyConfig(): Promise<{ httpProxy?: string; httpsProxy?: string } | null> {
+  try {
+    // 使用 PowerShell 获取系统代理配置
+    const psScript = `
+      $ErrorActionPreference = 'Stop'
+      try {
+        $proxy = Get-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -ErrorAction SilentlyContinue
+        $result = @{
+          ProxyEnable = $proxy.ProxyEnable
+          ProxyServer = $proxy.ProxyServer
+        }
+        $result | ConvertTo-Json -Compress
+      } catch {
+        @{ ProxyEnable = 0; ProxyServer = '' } | ConvertTo-Json -Compress
+      }
+    `
+    
+    const { stdout } = await execFilePromise('powershell', [
+      '-NoProfile',
+      '-ExecutionPolicy', 'Bypass',
+      '-Command', psScript
+    ], { encoding: 'utf-8' })
+    
+    const result = JSON.parse(stdout.trim())
+    
+    if (result.ProxyEnable === 1 && result.ProxyServer) {
+      // 解析代理服务器地址
+      // 格式可能是: "http=10.1.27.102:8080;https=10.1.27.102:8080" 或直接 "10.1.27.102:8080"
+      const proxyServer = result.ProxyServer as string
+      let httpProxy: string | undefined
+      let httpsProxy: string | undefined
+      
+      // 尝试解析分协议格式
+      const parts = proxyServer.split(';')
+      for (const part of parts) {
+        if (part.includes('=')) {
+          const [protocol, address] = part.split('=')
+          if (protocol.toLowerCase() === 'http') {
+            httpProxy = `http://${address}`
+          } else if (protocol.toLowerCase() === 'https') {
+            httpsProxy = `http://${address}`
+          }
+        }
+      }
+      
+      // 如果没有分协议格式，则使用同一个地址
+      if (!httpProxy && !httpsProxy && proxyServer) {
+        // 检查是否已经有协议前缀
+        if (proxyServer.startsWith('http://') || proxyServer.startsWith('https://')) {
+          httpProxy = proxyServer
+          httpsProxy = proxyServer
+        } else {
+          httpProxy = `http://${proxyServer}`
+          httpsProxy = `http://${proxyServer}`
+        }
+      }
+      
+      logger.info(`[getSystemProxyConfig] 系统代理已启用: HTTP=${httpProxy}, HTTPS=${httpsProxy}`)
+      return { httpProxy, httpsProxy }
+    }
+    
+    logger.info('[getSystemProxyConfig] 系统代理未启用')
+    return null
+  } catch (error) {
+    logger.warn('[getSystemProxyConfig] 获取系统代理配置失败:', error instanceof Error ? error.message : String(error))
+    return null
+  }
+}
+
 /**
  * 在主进程中发起 HTTP 请求
  * @param options - 请求配置选项
@@ -63,14 +142,29 @@ async function sendHttpRequestInMain(
 ): Promise<HttpResponseResult> {
   const startTime = Date.now()
 
+  // 如果请求使用系统代理，先获取系统代理配置
+  let effectiveProxy = options.proxy
+  if (options.useSystemProxy && !options.proxy) {
+    const systemProxy = await getSystemProxyConfig()
+    if (systemProxy) {
+      const targetUrl = new URL(options.url)
+      const isHttps = targetUrl.protocol === 'https:'
+      const proxyAddress = isHttps ? systemProxy.httpsProxy : systemProxy.httpProxy
+      if (proxyAddress) {
+        effectiveProxy = { url: proxyAddress }
+        logger.info(`[sendHttpRequestInMain] 使用系统代理: ${proxyAddress}`)
+      }
+    }
+  }
+
   return new Promise((resolve, reject) => {
     try {
       const targetUrl = new URL(options.url)
       const isHttps = targetUrl.protocol === 'https:'
 
       // 如果配置了代理，则通过代理发起请求
-      if (options.proxy && options.proxy.url) {
-        const proxyUrl = new URL(options.proxy.url)
+      if (effectiveProxy && effectiveProxy.url) {
+        const proxyUrl = new URL(effectiveProxy.url)
         
         // HTTPS 通过代理需要先建立 CONNECT 隧道
         if (isHttps) {
@@ -601,7 +695,8 @@ const DEFAULT_APP_CONFIG = {
   backupIntervalUnit: 'hours',
   lastBackupTime: 0,
   windowShortcut: 'Ctrl+Shift+H',  // 默认窗口显示/隐藏快捷键
-  logLevel: 'INFO'  // 日志等级
+  logLevel: 'INFO',  // 日志等级
+  closeToMinimize: false  // 关闭按钮行为：false=退出程序，true=最小化到托盘
 }
 
 // 备份定时器
@@ -1419,35 +1514,10 @@ async function createWindow() {
   logger.info(`[MAIN] 应用安装目录: ${APP_DIR}`)
   logger.info(`[MAIN] 配置目录: ${CONFIG_PATH}`)
   
-  // 检查旧配置目录（用户数据目录），如有配置则迁移到新目录
-  const oldConfigPath = path.join(app.getPath('userData'), 'config')
-  if (fs.existsSync(oldConfigPath) && fs.readdirSync(oldConfigPath).length > 0) {
-    try {
-      logger.info(`[MAIN] 检测到旧配置目录: ${oldConfigPath}，开始迁移`)
-      if (!fs.existsSync(CONFIG_PATH)) {
-        fs.mkdirSync(CONFIG_PATH, { recursive: true })
-      }
-      await copyDirectory(oldConfigPath, CONFIG_PATH)
-      logger.info(`[MAIN] 旧配置迁移成功`)
-    } catch (e) {
-      logger.warn(`[MAIN] 旧配置迁移失败，将使用新配置目录:`, e instanceof Error ? e.message : String(e))
-    }
-  }
-  
-  // 检查 safeStorage 是否可用（用于密码加密）
-  try {
-    if (safeStorage.isEncryptionAvailable()) {
-      logger.info('[MAIN] safeStorage 加密可用，密码将使用系统密钥链加密存储')
-    } else {
-      logger.warn('[MAIN] safeStorage 加密不可用，密码将使用 base64 编码存储')
-    }
-  } catch (e) {
-    logger.warn('[MAIN] 检查 safeStorage 失败:', e instanceof Error ? e.message : String(e))
-  }
-  
   await ensureConfigDir()
-  await loadAppConfig()
-  await shouldBackupNow()
+  
+  // 优化启动速度：先创建窗口显示界面，然后再加载配置
+  // 这样用户可以更快看到应用窗口，而不是等待所有初始化完成
   
   win = new BrowserWindow({
     width: 1200,
@@ -1464,6 +1534,18 @@ async function createWindow() {
     icon: path.join(PUBLIC, 'favicon.ico')
   })
 
+  // 窗口关闭事件处理 - 根据设置决定是退出还是最小化
+  win.on('close', (event) => {
+    if (appConfig?.closeToMinimize) {
+      // 设置为最小化到托盘时，阻止关闭并隐藏窗口
+      event.preventDefault()
+      if (win) {
+        win.hide()
+      }
+      logger.info('[MAIN] 窗口已最小化到托盘（关闭按钮行为）')
+    }
+  })
+
   // 仅在开发模式下打开开发者工具，生产构建中永远不打开
   if (!app.isPackaged && VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)
@@ -1471,6 +1553,46 @@ async function createWindow() {
   } else {
     win.loadFile(path.join(DIST, 'index.html'))
   }
+
+  // 优化启动速度：在窗口创建并开始加载页面后，后台执行配置加载
+  // 这样用户可以更快看到应用窗口
+  loadAppConfig().then(() => {
+    // 检查旧配置目录（用户数据目录），如有配置则迁移到新目录
+    const oldConfigPath = path.join(app.getPath('userData'), 'config')
+    if (fs.existsSync(oldConfigPath) && fs.readdirSync(oldConfigPath).length > 0) {
+      try {
+        logger.info(`[MAIN] 检测到旧配置目录: ${oldConfigPath}，开始迁移`)
+        if (!fs.existsSync(CONFIG_PATH)) {
+          fs.mkdirSync(CONFIG_PATH, { recursive: true })
+        }
+        copyDirectory(oldConfigPath, CONFIG_PATH).then(() => {
+          logger.info(`[MAIN] 旧配置迁移成功`)
+        }).catch((e) => {
+          logger.warn(`[MAIN] 旧配置迁移失败:`, e instanceof Error ? e.message : String(e))
+        })
+      } catch (e) {
+        logger.warn(`[MAIN] 旧配置迁移失败:`, e instanceof Error ? e.message : String(e))
+      }
+    }
+    
+    // 检查 safeStorage 是否可用（用于密码加密）
+    try {
+      if (safeStorage.isEncryptionAvailable()) {
+        logger.info('[MAIN] safeStorage 加密可用，密码将使用系统密钥链加密存储')
+      } else {
+        logger.warn('[MAIN] safeStorage 加密不可用，密码将使用 base64 编码存储')
+      }
+    } catch (e) {
+      logger.warn('[MAIN] 检查 safeStorage 失败:', e instanceof Error ? e.message : String(e))
+    }
+    
+    // 后台执行备份检查
+    shouldBackupNow()
+    
+    logger.info('[MAIN] 后台初始化完成')
+  }).catch((err) => {
+    logger.error('[MAIN] 加载配置失败:', err instanceof Error ? err.message : String(err))
+  })
   
   const menuTemplate: Electron.MenuItemConstructorOptions[] = [
     {
@@ -1487,6 +1609,8 @@ async function createWindow() {
           label: '退出',
           accelerator: 'Ctrl+Q',
           click: () => {
+            // 如果启用了最小化到托盘，则退出应用；否则也退出应用
+            // （最小化到托盘时，只有点击关闭按钮才会最小化，菜单退出直接退出）
             app.quit()
           }
         }
@@ -2429,6 +2553,31 @@ async function searchFilesRecursive(directory: string, pattern: string, depth = 
     logger.warn('searchFilesRecursive: failed:', error instanceof Error ? error.message : String(error))
   }
   return results
+}
+
+// ============================================
+// 防止应用重复启动 - 如果应用已启动，则聚焦到已有窗口
+// ============================================
+const gotTheLock = app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+  // 已有实例在运行，直接退出
+  logger.info('[MAIN] 检测到已有应用实例在运行，当前进程退出')
+  app.quit()
+} else {
+  // 新实例接收已运行实例的激活请求
+  app.on('second-instance', (_event, _commandLine, _workingDirectory) => {
+    logger.info('[MAIN] 收到第二个实例激活请求，聚焦到已有窗口')
+    if (win) {
+      // 如果窗口被最小化或隐藏，恢复显示
+      if (win.isMinimized()) {
+        win.restore()
+      }
+      // 显示并聚焦窗口
+      win.show()
+      win.focus()
+    }
+  })
 }
 
 app.whenReady().then(() => {

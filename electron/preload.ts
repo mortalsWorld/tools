@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       url: string
       auth?: { username: string; password: string }
     }
+    useSystemProxy?: boolean  // 是否使用系统代理配置
   }) => ipcRenderer.invoke('http-request', options),
   loadConfig: (fileName: string) => ipcRenderer.invoke('load-config', fileName),
   saveConfig: (fileName: string, data: any) => ipcRenderer.invoke('save-config', fileName, data),

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Descriptions, Button, Spin, message, Alert, Tag, Collapse } from 'antd';
+import { Card, Row, Col, Descriptions, Button, message, Alert, Tag, Collapse } from 'antd';
 import { ReloadOutlined, GlobalOutlined, EnvironmentOutlined, WifiOutlined, HomeOutlined } from '@ant-design/icons';
 const { Panel } = Collapse;
 
@@ -22,40 +22,56 @@ export const NetworkTool: React.FC = () => {
   const [ipInfo, setIpInfo] = useState<IPInfo | null>(null);
   const [localNetworkInfo, setLocalNetworkInfo] = useState<LocalNetworkInfo>({ ipv4: [], ipv6: [] });
   const [loading, setLoading] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);  // 标记初始加载是否完成
 
-  const fetchIPInfo = async () => {
-    setLoading(true);
+  // 优化的 fetchIPInfo - 支持懒加载和系统代理
+  const fetchIPInfo = async (isManualRefresh = false) => {
+    // 如果是手动刷新或者还没有加载过，才显示 loading
+    if (isManualRefresh || !initialLoadDone) {
+      setLoading(true);
+    }
     try {
       // 通过主进程发起HTTP请求，避免CORS限制
+      // 使用系统代理配置，自动检测并使用系统设置的代理
       const response = await (window as any).electronAPI.httpRequest({
         url: 'https://ipinfo.io/json',
         method: 'GET',
         timeoutMs: 15000,
+        useSystemProxy: true,  // 自动使用系统代理配置
       });
 
       if (response.status >= 200 && response.status < 300 && response.body) {
-        // 主进程返回的body已经是JSON格式字符串，尝试解析
         try {
           const data = typeof response.body === 'string'
             ? JSON.parse(response.body)
             : response.body;
           setIpInfo(data);
-          message.success('获取成功');
+          setInitialLoadDone(true);  // 标记初始加载完成
+          if (isManualRefresh) {
+            message.success('获取成功');
+          }
         } catch (parseError) {
           console.error('解析响应失败:', parseError);
-          message.error('解析响应失败');
+          if (isManualRefresh) {
+            message.error('解析响应失败');
+          }
         }
       } else {
-        message.error(`获取失败，状态码: ${response.status}`);
+        if (isManualRefresh) {
+          message.error(`获取失败，状态码: ${response.status}`);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch IP info:', error);
-      message.error(`网络请求失败: ${error instanceof Error ? error.message : String(error)}`);
+      if (isManualRefresh) {
+        message.error(`网络请求失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // 优化的本地网络信息获取 - 使用 requestIdleCallback 延迟执行
   const fetchLocalNetworkInfo = async () => {
     const localIPs: LocalNetworkInfo = { ipv4: [], ipv6: [] };
     
@@ -67,7 +83,8 @@ export const NetworkTool: React.FC = () => {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // 使用更短的超时时间
+      await new Promise(resolve => setTimeout(resolve, 50));
       
       if (pc.localDescription && pc.localDescription.sdp) {
         const sdp = pc.localDescription.sdp;
@@ -115,13 +132,26 @@ export const NetworkTool: React.FC = () => {
     return !isPublicIP(ip);
   };
 
+  // 优化：先加载本地网络信息（快速），然后异步加载公网信息
   useEffect(() => {
-    fetchIPInfo();
+    // 先立即获取本地网络信息
     fetchLocalNetworkInfo();
+    
+    // 使用 requestIdleCallback 延迟加载公网信息，不阻塞主线程
+    if ('requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(() => {
+        fetchIPInfo(false);
+      }, { timeout: 2000 });
+    } else {
+      // 降级处理：使用 setTimeout 延迟 100ms
+      setTimeout(() => {
+        fetchIPInfo(false);
+      }, 100);
+    }
   }, []);
 
   const handleRefresh = () => {
-    fetchIPInfo();
+    fetchIPInfo(true);
     fetchLocalNetworkInfo();
   };
 
@@ -140,50 +170,49 @@ export const NetworkTool: React.FC = () => {
           </Button>
         }
       >
-        <Spin spinning={loading}>
-          {ipInfo ? (
-            <Row gutter={[16, 16]}>
-              <Col xs={24} md={12}>
-                <Descriptions title="公网基本信息" bordered column={1}>
-                  <Descriptions.Item label="公网 IP 地址">
-                    <GlobalOutlined style={{ marginRight: '8px' }} />
-                    {ipInfo.ip}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="城市">
-                    <EnvironmentOutlined style={{ marginRight: '8px' }} />
-                    {ipInfo.city}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="地区">
-                    <EnvironmentOutlined style={{ marginRight: '8px' }} />
-                    {ipInfo.region}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="国家">
-                    <EnvironmentOutlined style={{ marginRight: '8px' }} />
-                    {ipInfo.country}
-                  </Descriptions.Item>
-                </Descriptions>
-              </Col>
-              <Col xs={24} md={12}>
-                <Descriptions title="公网详细信息" bordered column={1}>
-                  <Descriptions.Item label="经纬度">
-                    <EnvironmentOutlined style={{ marginRight: '8px' }} />
-                    {ipInfo.loc}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="网络运营商">
-                    <WifiOutlined style={{ marginRight: '8px' }} />
-                    {ipInfo.org}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="时区">
-                    <EnvironmentOutlined style={{ marginRight: '8px' }} />
-                    {ipInfo.timezone}
-                  </Descriptions.Item>
-                </Descriptions>
-              </Col>
-            </Row>
-          ) : (
-            <Alert message="无法获取公网IP信息，请刷新重试" type="warning" />
-          )}
-        </Spin>
+        {/* 优化：本地网络信息始终显示，公网信息单独处理加载状态 */}
+        {ipInfo ? (
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={12}>
+              <Descriptions title="公网基本信息" bordered column={1}>
+                <Descriptions.Item label="公网 IP 地址">
+                  <GlobalOutlined style={{ marginRight: '8px' }} />
+                  {ipInfo.ip}
+                </Descriptions.Item>
+                <Descriptions.Item label="城市">
+                  <EnvironmentOutlined style={{ marginRight: '8px' }} />
+                  {ipInfo.city}
+                </Descriptions.Item>
+                <Descriptions.Item label="地区">
+                  <EnvironmentOutlined style={{ marginRight: '8px' }} />
+                  {ipInfo.region}
+                </Descriptions.Item>
+                <Descriptions.Item label="国家">
+                  <EnvironmentOutlined style={{ marginRight: '8px' }} />
+                  {ipInfo.country}
+                </Descriptions.Item>
+              </Descriptions>
+            </Col>
+            <Col xs={24} md={12}>
+              <Descriptions title="公网详细信息" bordered column={1}>
+                <Descriptions.Item label="经纬度">
+                  <EnvironmentOutlined style={{ marginRight: '8px' }} />
+                  {ipInfo.loc}
+                </Descriptions.Item>
+                <Descriptions.Item label="网络运营商">
+                  <WifiOutlined style={{ marginRight: '8px' }} />
+                  {ipInfo.org}
+                </Descriptions.Item>
+                <Descriptions.Item label="时区">
+                  <EnvironmentOutlined style={{ marginRight: '8px' }} />
+                  {ipInfo.timezone}
+                </Descriptions.Item>
+              </Descriptions>
+            </Col>
+          </Row>
+        ) : (
+          <Alert message="正在获取公网IP信息..." type="info" showIcon />
+        )}
       </Card>
 
       <Card 
