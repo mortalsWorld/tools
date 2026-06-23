@@ -131,8 +131,8 @@ npm run build
 ```
 
 构建完成后，安装包位于 `release/` 目录下：
-- `DevTools Setup 1.3.0.exe` - NSIS 安装包（约 100 MB）
-- `DevTools 1.3.0.exe` - 便携版（约 100 MB）
+- `DevTools Setup 1.4.0.exe` - NSIS 安装包（约 100 MB）
+- `DevTools 1.4.0.exe` - 便携版（约 100 MB）
 
 ### 安装说明
 
