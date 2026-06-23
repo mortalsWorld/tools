@@ -46,8 +46,8 @@
 
 ## 技术栈
 
-- **前端框架**: React 19.2
-- **类型系统**: TypeScript 5.4
+- **前端框架**: React 19
+- **类型系统**: TypeScript 5.6
 - **桌面框架**: Electron 42.4
 - **UI 组件库**: Ant Design 6.4
 - **拖拽排序**: @dnd-kit
@@ -188,10 +188,9 @@ npm run build
 
 ### 配置文件说明
 
-- `app-config.json` - 应用设置（主题、快捷键、备份配置等）
-- `shortcuts.json` - 文件快速启动配置
-- `websites.json` - 网页快速打开配置
+- `app-config.json` - 应用设置（主题、快捷键、备份配置、窗口行为等）
 - `passwords.json` - 密码管理配置（**已加密存储**）
+- `backups/` - 配置备份目录
 
 ## 开发指南
 
