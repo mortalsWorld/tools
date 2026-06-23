@@ -2,7 +2,7 @@
 
 一个现代化的通用工具集合桌面应用程序，基于 Electron + React + TypeScript 构建。
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![License](https://img.shields.io/badge/license-MIT--NC-yellow.svg)
 ![Electron](https://img.shields.io/badge/Electron-42.4.0-47848F?style=flat-square&logo=electron)
 ![React](https://img.shields.io/badge/React-19.2.7-61DAFB?style=flat-square&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.4.5-3178C6?style=flat-square&logo=typescript)
@@ -246,7 +246,15 @@ toolRegistry.registerCategory({
 
 ## 许可证
 
-本项目基于 MIT 许可证开源，详见 [LICENSE](LICENSE) 文件。
+本项目基于 **CC BY-NC 4.0 许可证（署名-非商业性使用）** 开源，详见 [LICENSE](LICENSE) 文件。
+
+**使用限制：**
+- ✅ 允许个人学习、研究和非商业使用
+- ✅ 允许修改和分发衍生作品（需保留版权声明）
+- ❌ 禁止任何形式的商业使用
+- ❌ 禁止集成到商业产品或服务中
+
+如需商业授权，请联系作者获得书面许可。
 
 ## 致谢
 

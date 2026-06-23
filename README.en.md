@@ -2,7 +2,7 @@
 
 A modern general-purpose tool collection desktop application, built with Electron + React + TypeScript.
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![License](https://img.shields.io/badge/license-MIT--NC-yellow.svg)
 ![Electron](https://img.shields.io/badge/Electron-31.7.7-47848F?style=flat-square&logo=electron)
 ![React](https://img.shields.io/badge/React-18.3.1-61DAFB?style=flat-square&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.4.5-3178C6?style=flat-square&logo=typescript)
@@ -188,7 +188,15 @@ toolRegistry.registerCategory({
 
 ## License
 
-This project is open source under the MIT license. See [LICENSE](LICENSE) for details.
+This project is open source under the **CC BY-NC 4.0 License (Attribution-NonCommercial)**. See [LICENSE](LICENSE) for details.
+
+**Usage Restrictions:**
+- ✅ Personal learning, research, and non-commercial use allowed
+- ✅ Modification and distribution of derivative works allowed (with copyright notice)
+- ❌ Any form of commercial use is prohibited
+- ❌ Integration into commercial products or services is prohibited
+
+For commercial licensing, please contact the author for written permission.
 
 ## Acknowledgements
 
