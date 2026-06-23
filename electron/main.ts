@@ -58,14 +58,22 @@ interface HttpResponseResult {
 // 系统代理配置获取函数
 // ============================================================================
 
+// 系统代理配置缓存 - 避免每次请求都调用 PowerShell
+let cachedSystemProxy: { httpProxy?: string; httpsProxy?: string } | null = null
+let systemProxyCached = false
+
 /**
- * 获取 Windows 系统代理配置
+ * 获取 Windows 系统代理配置（带缓存和超时）
  * 通过 PowerShell 查询系统代理设置
+ * @param forceRefresh - 是否强制刷新缓存
  * @returns 系统代理配置对象，包含 HTTP 和 HTTPS 代理地址
  */
-async function getSystemProxyConfig(): Promise<{ httpProxy?: string; httpsProxy?: string } | null> {
+async function getSystemProxyConfig(forceRefresh = false): Promise<{ httpProxy?: string; httpsProxy?: string } | null> {
+  if (systemProxyCached && !forceRefresh) {
+    return cachedSystemProxy
+  }
+
   try {
-    // 使用 PowerShell 获取系统代理配置
     const psScript = `
       $ErrorActionPreference = 'Stop'
       try {
@@ -79,23 +87,23 @@ async function getSystemProxyConfig(): Promise<{ httpProxy?: string; httpsProxy?
         @{ ProxyEnable = 0; ProxyServer = '' } | ConvertTo-Json -Compress
       }
     `
-    
-    const { stdout } = await execFilePromise('powershell', [
+
+    const timeoutMs = 3000
+    const psPromise = execFilePromise('powershell', [
       '-NoProfile',
       '-ExecutionPolicy', 'Bypass',
       '-Command', psScript
-    ], { encoding: 'utf-8' })
-    
+    ], { encoding: 'utf-8', timeout: timeoutMs })
+
+    const { stdout } = await psPromise
+
     const result = JSON.parse(stdout.trim())
-    
+
     if (result.ProxyEnable === 1 && result.ProxyServer) {
-      // 解析代理服务器地址
-      // 格式可能是: "http=10.1.27.102:8080;https=10.1.27.102:8080" 或直接 "10.1.27.102:8080"
       const proxyServer = result.ProxyServer as string
       let httpProxy: string | undefined
       let httpsProxy: string | undefined
-      
-      // 尝试解析分协议格式
+
       const parts = proxyServer.split(';')
       for (const part of parts) {
         if (part.includes('=')) {
@@ -107,10 +115,8 @@ async function getSystemProxyConfig(): Promise<{ httpProxy?: string; httpsProxy?
           }
         }
       }
-      
-      // 如果没有分协议格式，则使用同一个地址
+
       if (!httpProxy && !httpsProxy && proxyServer) {
-        // 检查是否已经有协议前缀
         if (proxyServer.startsWith('http://') || proxyServer.startsWith('https://')) {
           httpProxy = proxyServer
           httpsProxy = proxyServer
@@ -119,16 +125,24 @@ async function getSystemProxyConfig(): Promise<{ httpProxy?: string; httpsProxy?
           httpsProxy = `http://${proxyServer}`
         }
       }
-      
+
+      cachedSystemProxy = { httpProxy, httpsProxy }
+      systemProxyCached = true
       logger.info(`[getSystemProxyConfig] 系统代理已启用: HTTP=${httpProxy}, HTTPS=${httpsProxy}`)
-      return { httpProxy, httpsProxy }
+      return cachedSystemProxy
     }
-    
+
+    cachedSystemProxy = null
+    systemProxyCached = true
     logger.info('[getSystemProxyConfig] 系统代理未启用')
     return null
   } catch (error) {
     logger.warn('[getSystemProxyConfig] 获取系统代理配置失败:', error instanceof Error ? error.message : String(error))
-    return null
+    if (!systemProxyCached) {
+      cachedSystemProxy = null
+      systemProxyCached = true
+    }
+    return cachedSystemProxy
   }
 }
 
@@ -674,9 +688,6 @@ const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 let CONFIG_PATH: string
 let APP_DIR: string
 
-// 应用配置对象
-let appConfig: any = null
-
 /**
  * 默认应用配置
  */
@@ -698,6 +709,9 @@ const DEFAULT_APP_CONFIG = {
   logLevel: 'INFO',  // 日志等级
   closeToMinimize: false  // 关闭按钮行为：false=退出程序，true=最小化到托盘
 }
+
+// 应用配置对象 - 初始化为默认值，避免异步加载前访问报错
+let appConfig: any = { ...DEFAULT_APP_CONFIG }
 
 // 备份定时器
 let backupTimer: NodeJS.Timeout | null = null
@@ -1404,6 +1418,7 @@ async function saveAppConfig(config: any) {
   const oldConfigPath = CONFIG_PATH
   const oldBackupDir = getBackupDir()
   
+  logger.info(`saveAppConfig: 开始处理, CONFIG_PATH=${CONFIG_PATH}, closeToMinimize=${config?.closeToMinimize}`)
   appConfig = config
   
   if (appConfig.configDir) {
@@ -1813,6 +1828,7 @@ async function createWindow() {
     logger.debug('save-app-config: 配置内容:', JSON.stringify(config, null, 2))
     logger.debug('save-app-config: toolbarOrder length:', config?.toolbarOrder?.length || 0)
     logger.debug('save-app-config: hiddenTools length:', config?.hiddenTools?.length || 0)
+    logger.debug('save-app-config: closeToMinimize:', config?.closeToMinimize)
     try {
       const result = await saveAppConfig(config)
       logger.info('save-app-config: 配置保存成功')

@@ -852,9 +852,31 @@ export const SettingsTool: React.FC = () => {
             label="关闭按钮行为"
             name="closeToMinimize"
             valuePropName="checked"
-            tooltip="开启后，点击关闭按钮将最小化到托盘而不是退出程序；菜单中的退出选项仍会退出程序"
+            tooltip="开启后，点击关闭按钮将最小化到托盘而不是退出程序；菜单中的退出选项仍会退出程序。切换后将自动保存。"
           >
-            <Switch checkedChildren="最小化到托盘" unCheckedChildren="退出程序" />
+            <Switch
+              checkedChildren="最小化到托盘"
+              unCheckedChildren="退出程序"
+              onChange={async (checked) => {
+                // 切换 closeToMinimize 时立即保存配置，避免依赖保存按钮
+                console.log('[SettingsTool] closeToMinimize 切换为:', checked)
+                try {
+                  const existingConfig = await (window.electronAPI as any).getAppConfig()
+                  if (!existingConfig) return
+                  const newConfig = { ...existingConfig, closeToMinimize: checked }
+                  const success = await (window.electronAPI as any).saveAppConfig(newConfig)
+                  if (success) {
+                    message.success(checked ? '已开启：关闭按钮将最小化到托盘' : '已关闭：关闭按钮将退出程序')
+                    setOriginalConfigDir(newConfig.configDir || '')
+                  } else {
+                    message.error('保存失败')
+                  }
+                } catch (error) {
+                  console.error('[SettingsTool] closeToMinimize 自动保存失败:', error)
+                  message.error('保存失败')
+                }
+              }}
+            />
           </Form.Item>
           
           <Form.Item

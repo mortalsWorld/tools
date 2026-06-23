@@ -22,22 +22,20 @@ export const NetworkTool: React.FC = () => {
   const [ipInfo, setIpInfo] = useState<IPInfo | null>(null);
   const [localNetworkInfo, setLocalNetworkInfo] = useState<LocalNetworkInfo>({ ipv4: [], ipv6: [] });
   const [loading, setLoading] = useState(false);
-  const [initialLoadDone, setInitialLoadDone] = useState(false);  // 标记初始加载是否完成
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
+  const [ipError, setIpError] = useState<string | null>(null);
 
-  // 优化的 fetchIPInfo - 支持懒加载和系统代理
   const fetchIPInfo = async (isManualRefresh = false) => {
-    // 如果是手动刷新或者还没有加载过，才显示 loading
     if (isManualRefresh || !initialLoadDone) {
       setLoading(true);
     }
+    setIpError(null);
     try {
-      // 通过主进程发起HTTP请求，避免CORS限制
-      // 使用系统代理配置，自动检测并使用系统设置的代理
       const response = await (window as any).electronAPI.httpRequest({
         url: 'https://ipinfo.io/json',
         method: 'GET',
-        timeoutMs: 15000,
-        useSystemProxy: true,  // 自动使用系统代理配置
+        timeoutMs: 10000,
+        useSystemProxy: true,
       });
 
       if (response.status >= 200 && response.status < 300 && response.body) {
@@ -46,32 +44,37 @@ export const NetworkTool: React.FC = () => {
             ? JSON.parse(response.body)
             : response.body;
           setIpInfo(data);
-          setInitialLoadDone(true);  // 标记初始加载完成
+          setInitialLoadDone(true);
           if (isManualRefresh) {
             message.success('获取成功');
           }
         } catch (parseError) {
           console.error('解析响应失败:', parseError);
+          const errMsg = '解析响应失败';
+          setIpError(errMsg);
           if (isManualRefresh) {
-            message.error('解析响应失败');
+            message.error(errMsg);
           }
         }
       } else {
+        const errMsg = `获取失败，状态码: ${response.status}`;
+        setIpError(errMsg);
         if (isManualRefresh) {
-          message.error(`获取失败，状态码: ${response.status}`);
+          message.error(errMsg);
         }
       }
     } catch (error) {
       console.error('Failed to fetch IP info:', error);
+      const errMsg = error instanceof Error ? error.message : String(error);
+      setIpError(errMsg);
       if (isManualRefresh) {
-        message.error(`网络请求失败: ${error instanceof Error ? error.message : String(error)}`);
+        message.error(`网络请求失败: ${errMsg}`);
       }
     } finally {
       setLoading(false);
     }
   };
 
-  // 优化的本地网络信息获取 - 使用 requestIdleCallback 延迟执行
   const fetchLocalNetworkInfo = async () => {
     const localIPs: LocalNetworkInfo = { ipv4: [], ipv6: [] };
     
@@ -83,8 +86,7 @@ export const NetworkTool: React.FC = () => {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       
-      // 使用更短的超时时间
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       if (pc.localDescription && pc.localDescription.sdp) {
         const sdp = pc.localDescription.sdp;
@@ -132,22 +134,44 @@ export const NetworkTool: React.FC = () => {
     return !isPublicIP(ip);
   };
 
-  // 优化：先加载本地网络信息（快速），然后异步加载公网信息
   useEffect(() => {
-    // 先立即获取本地网络信息
-    fetchLocalNetworkInfo();
-    
-    // 使用 requestIdleCallback 延迟加载公网信息，不阻塞主线程
-    if ('requestIdleCallback' in window) {
-      (window as any).requestIdleCallback(() => {
-        fetchIPInfo(false);
-      }, { timeout: 2000 });
-    } else {
-      // 降级处理：使用 setTimeout 延迟 100ms
-      setTimeout(() => {
-        fetchIPInfo(false);
-      }, 100);
-    }
+    let mounted = true;
+
+    const init = () => {
+      if (!mounted) return;
+
+      if ('requestIdleCallback' in window) {
+        (window as any).requestIdleCallback(() => {
+          if (mounted) {
+            fetchLocalNetworkInfo();
+          }
+        }, { timeout: 500 });
+
+        (window as any).requestIdleCallback(() => {
+          if (mounted) {
+            fetchIPInfo(false);
+          }
+        }, { timeout: 2000 });
+      } else {
+        setTimeout(() => {
+          if (mounted) {
+            fetchLocalNetworkInfo();
+          }
+        }, 50);
+
+        setTimeout(() => {
+          if (mounted) {
+            fetchIPInfo(false);
+          }
+        }, 200);
+      }
+    };
+
+    init();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const handleRefresh = () => {
@@ -210,6 +234,18 @@ export const NetworkTool: React.FC = () => {
               </Descriptions>
             </Col>
           </Row>
+        ) : ipError ? (
+          <Alert 
+            message="获取公网IP信息失败" 
+            description={ipError}
+            type="error" 
+            showIcon 
+            action={
+              <Button size="small" type="primary" onClick={() => fetchIPInfo(true)}>
+                重试
+              </Button>
+            }
+          />
         ) : (
           <Alert message="正在获取公网IP信息..." type="info" showIcon />
         )}
