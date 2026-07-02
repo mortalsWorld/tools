@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Card, Input, Button, Space, message, Table, Alert, Divider, Statistic, Row, Col, Badge, Tag } from 'antd';
-import { SearchOutlined, ClearOutlined, CopyOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { SearchOutlined, ClearOutlined, CopyOutlined, DownloadOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 
 const { TextArea } = Input;
 
@@ -254,6 +254,43 @@ export const IPLookupTool: React.FC = () => {
     message.success('结果已复制到剪贴板');
   };
 
+  const handleExportCSV = () => {
+    if (results.length === 0) {
+      message.warning('没有可导出的数据');
+      return;
+    }
+
+    const headers = ['序号', 'IP地址', '状态', '匹配的子网'];
+    const rows = results.map((r, idx) => [
+      (idx + 1).toString(),
+      r.ip,
+      r.status === 'match' ? '匹配' : r.status === 'miss' ? '未匹配' : '无效IP',
+      r.matched.join('; '),
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const fileName = `IP查找结果_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.csv`;
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    message.success('结果已导出');
+  };
+
   // 统计信息
   const totalCount = results.length;
   const matchCount = results.filter(r => r.status === 'match').length;
@@ -442,9 +479,14 @@ export const IPLookupTool: React.FC = () => {
 
             <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontWeight: 'bold' }}>匹配结果详情</span>
-              <Button size="small" icon={<CopyOutlined />} onClick={handleCopyResults}>
-                复制结果
-              </Button>
+              <Space>
+                <Button size="small" icon={<CopyOutlined />} onClick={handleCopyResults}>
+                  复制结果
+                </Button>
+                <Button size="small" icon={<DownloadOutlined />} onClick={handleExportCSV}>
+                  导出 CSV
+                </Button>
+              </Space>
             </div>
             <Table
               columns={columns}
