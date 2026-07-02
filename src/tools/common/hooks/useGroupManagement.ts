@@ -5,7 +5,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Group, BaseItem } from '../types';
-import { getChildGroups, getGroupPath, ensureSortOrder } from '../utils/groupUtils';
+import { getChildGroups, getGroupPath, ensureSortOrder, getDescendantGroupIds } from '../utils/groupUtils';
 
 export interface UseGroupManagementOptions {
   groups: Group[];
@@ -19,7 +19,7 @@ export interface UseGroupManagementReturn {
   getChildGroups: (parentId: string | null) => Group[];
   toggleGroup: (groupId: string, e: React.MouseEvent) => void;
   getGroupPath: (groupId: string) => string;
-  getGroupItemCount: (groupId: string, items: BaseItem[]) => number;
+  getGroupItemCount: (groupId: string, items: BaseItem[], recursive?: boolean) => number;
   handleGroupDrop: (draggedGroupId: string, targetGroupId: string) => void;
   saveGroups: (newGroups: Group[]) => void;
 }
@@ -71,10 +71,14 @@ export function useGroupManagement(options: UseGroupManagementOptions): UseGroup
     return getGroupPath(groups, groupId);
   }, [groups]);
 
-  const getGroupItemCount = useCallback((groupId: string, items: BaseItem[]): number => {
+  const getGroupItemCount = useCallback((groupId: string, items: BaseItem[], recursive = false): number => {
     if (groupId === 'all') return items.length;
+    if (recursive) {
+      const groupIds = getDescendantGroupIds(groups, groupId);
+      return items.filter(item => groupIds.includes(item.group)).length;
+    }
     return items.filter(item => item.group === groupId).length;
-  }, []);
+  }, [groups]);
 
   const handleGroupDrop = useCallback((draggedGroupId: string, targetGroupId: string) => {
     console.log(`[useGroupManagement] handleGroupDrop called: ${draggedGroupId} -> ${targetGroupId}, 编辑模式: ${isEditMode}`);

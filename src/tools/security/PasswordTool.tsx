@@ -51,6 +51,7 @@ import {
   useDragAndDrop,
   useBatchSelection,
   useConfigPersistence,
+  getDescendantGroupIds,
 } from '../common';
 
 const { Text } = Typography;
@@ -193,7 +194,8 @@ export const PasswordTool: React.FC = () => {
     let result = sortedItems;
 
     if (selectedGroup !== 'all') {
-      result = result.filter(item => item.group === selectedGroup);
+      const groupIds = getDescendantGroupIds(groups, selectedGroup);
+      result = result.filter(item => groupIds.includes(item.group));
     }
 
     if (searchText.trim()) {
@@ -207,7 +209,7 @@ export const PasswordTool: React.FC = () => {
     }
 
     return result;
-  }, [sortedItems, selectedGroup, searchText]);
+  }, [sortedItems, selectedGroup, searchText, groups]);
 
   const itemIds = useMemo(() => filteredItems.map(item => item.id), [filteredItems]);
 
@@ -645,7 +647,7 @@ export const PasswordTool: React.FC = () => {
               items={items}
               token={token}
               getChildGroups={getChildGroups}
-              getGroupItemCount={(groupId: string) => getGroupItemCount(groupId, items)}
+              getGroupItemCount={(groupId: string) => getGroupItemCount(groupId, items, true)}
               handleGroupDragStart={handleGroupDragStart}
               handleGroupDragOver={handleGroupDragOver}
               handleGroupDrop={handleGroupDrop}

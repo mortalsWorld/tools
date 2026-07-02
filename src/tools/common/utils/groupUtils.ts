@@ -114,3 +114,12 @@ export function ensureSortOrder(groups: Group[]): Group[] {
     sortOrder: group.sortOrder !== undefined ? group.sortOrder : index
   }));
 }
+
+export function getDescendantGroupIds(groups: Group[], parentId: string): string[] {
+  const result: string[] = [parentId];
+  const children = groups.filter(g => g.parentId === parentId);
+  for (const child of children) {
+    result.push(...getDescendantGroupIds(groups, child.id));
+  }
+  return result;
+}

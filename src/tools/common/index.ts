@@ -15,6 +15,7 @@ export {
   updateGroupHierarchy,
   sortGroups,
   ensureSortOrder,
+  getDescendantGroupIds,
 } from './utils/groupUtils';
 
 export {

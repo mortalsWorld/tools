@@ -169,6 +169,7 @@ export const IPLookupTool: React.FC = () => {
   const [results, setResults] = useState<MatchResult[]>([]);
   const [errors, setErrors] = useState<ParseError[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
 
   const handleSearch = () => {
     if (!ipList.trim()) {
@@ -226,6 +227,7 @@ export const IPLookupTool: React.FC = () => {
     setResults(matchResults);
     setErrors(parseErrors);
     setHasSearched(true);
+    setPagination(prev => ({ ...prev, current: 1 }));
 
     const matchCount = matchResults.filter(r => r.status === 'match').length;
     const missCount = matchResults.filter(r => r.status === 'miss').length;
@@ -447,7 +449,13 @@ export const IPLookupTool: React.FC = () => {
             <Table
               columns={columns}
               dataSource={results.map((r, idx) => ({ ...r, key: idx }))}
-              pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }}
+              pagination={{
+                ...pagination,
+                showSizeChanger: true,
+                pageSizeOptions: ['10', '20', '50', '100'],
+                showTotal: (total) => `共 ${total} 条`,
+                onChange: (page, pageSize) => setPagination({ current: page, pageSize }),
+              }}
               size="small"
               scroll={{ y: 400 }}
               style={{ 

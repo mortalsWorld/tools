@@ -48,6 +48,7 @@ import {
   useDragAndDrop,
   useBatchSelection,
   useConfigPersistence,
+  getDescendantGroupIds,
 } from '../common';
 
 const { Text } = Typography;
@@ -101,8 +102,9 @@ export const WebOpenerTool: React.FC = () => {
   // 过滤后的项目
   const filteredItems = useMemo(() => {
     if (selectedGroup === 'all') return sortedItems;
-    return sortedItems.filter(item => item.group === selectedGroup);
-  }, [sortedItems, selectedGroup]);
+    const groupIds = getDescendantGroupIds(groups, selectedGroup);
+    return sortedItems.filter(item => groupIds.includes(item.group));
+  }, [sortedItems, selectedGroup, groups]);
 
   // 项目 ID 列表
   const itemIds = useMemo(() => filteredItems.map(item => item.id), [filteredItems]);
@@ -518,7 +520,7 @@ export const WebOpenerTool: React.FC = () => {
               items={items}
               token={token}
               getChildGroups={getChildGroups}
-              getGroupItemCount={(groupId: string) => getGroupItemCount(groupId, items)}
+              getGroupItemCount={(groupId: string) => getGroupItemCount(groupId, items, true)}
               handleGroupDragStart={handleGroupDragStart}
               handleGroupDragOver={handleGroupDragOver}
               handleGroupDrop={handleGroupDrop}

@@ -48,6 +48,7 @@ import {
   useDragAndDrop,
   useBatchSelection,
   useConfigPersistence,
+  getDescendantGroupIds,
 } from '../common';
 
 const { Text } = Typography;
@@ -103,8 +104,9 @@ const FileLauncherTool: React.FC = () => {
 
   const filteredItems = useMemo(() => {
     if (selectedGroup === 'all') return sortedItems;
-    return sortedItems.filter(item => item.group === selectedGroup);
-  }, [sortedItems, selectedGroup]);
+    const groupIds = getDescendantGroupIds(groups, selectedGroup);
+    return sortedItems.filter(item => groupIds.includes(item.group));
+  }, [sortedItems, selectedGroup, groups]);
 
   const itemIds = useMemo(() => {
     return filteredItems.map(item => item.id);
@@ -806,7 +808,7 @@ const FileLauncherTool: React.FC = () => {
               items={items}
               token={token}
               getChildGroups={getChildGroups}
-              getGroupItemCount={(groupId) => getGroupItemCount(groupId, items)}
+              getGroupItemCount={(groupId) => getGroupItemCount(groupId, items, true)}
               handleGroupDragStart={handleGroupDragStart}
               handleGroupDragOver={handleGroupDragOver}
               handleGroupDrop={handleGroupDrop}
