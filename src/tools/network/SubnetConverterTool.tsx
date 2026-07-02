@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Card, Input, Button, Space, message, Descriptions, Tag, Divider, Alert } from 'antd';
-import { ReloadOutlined, CalculatorOutlined } from '@ant-design/icons';
+import { ReloadOutlined, CalculatorOutlined, DownloadOutlined } from '@ant-design/icons';
 
 const { TextArea } = Input;
 
@@ -296,6 +296,55 @@ export const SubnetConverterTool: React.FC = () => {
     setErrors([]);
   };
 
+  const handleExportCSV = () => {
+    if (results.length === 0) {
+      message.warning('没有可导出的数据');
+      return;
+    }
+
+    const headers = [
+      '输入', '起始IP', '结束IP', 'CIDR表示', '网络地址', '广播地址',
+      '子网掩码', '通配符掩码', '总地址数', '可用主机数', '是否私有IP', 'IP类别'
+    ];
+
+    const rows = results.map(r => [
+      r.input,
+      r.startIP,
+      r.endIP,
+      r.cidr,
+      r.networkAddress,
+      r.broadcastAddress,
+      r.subnetMask,
+      r.wildcardMask,
+      r.totalAddresses.toString(),
+      r.usableHosts.toString(),
+      r.isPrivate ? '是' : '否',
+      r.ipClass
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const fileName = `子网转换结果_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.csv`;
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    message.success('CSV 导出成功');
+  };
+
   return (
     <div style={{ padding: '16px' }}>
       <Card
@@ -366,7 +415,17 @@ export const SubnetConverterTool: React.FC = () => {
         {/* 结果显示 */}
         {results.length > 0 && (
           <div>
-            <Divider>转换结果</Divider>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <Divider style={{ margin: 0, flex: 1 }}>转换结果</Divider>
+              <Button
+                size="small"
+                icon={<DownloadOutlined />}
+                onClick={handleExportCSV}
+                style={{ marginLeft: '12px' }}
+              >
+                导出 CSV
+              </Button>
+            </div>
             {results.map((result, index) => (
               <Card 
                 key={index} 

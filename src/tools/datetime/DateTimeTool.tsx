@@ -17,9 +17,29 @@ export const DateTimeTool: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  const formatDate = (date: Date, includeMs: boolean): string => {
+    const base = date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    if (includeMs) {
+      const ms = date.getMilliseconds().toString().padStart(3, '0');
+      return `${base}.${ms}`;
+    }
+    return base;
+  };
+
   const timestampToDate = () => {
     try {
       let ts = parseInt(timestamp);
+      if (isNaN(ts)) {
+        throw new Error('Invalid timestamp');
+      }
       if (timestampUnit === 's') {
         ts *= 1000;
       }
@@ -27,15 +47,7 @@ export const DateTimeTool: React.FC = () => {
       if (isNaN(date.getTime())) {
         throw new Error('Invalid timestamp');
       }
-      setDateString(date.toLocaleString('zh-CN', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      }));
+      setDateString(formatDate(date, timestampUnit === 'ms'));
       message.success('转换成功');
     } catch (e) {
       message.error('时间戳格式错误');
@@ -44,9 +56,16 @@ export const DateTimeTool: React.FC = () => {
 
   const dateToTimestamp = () => {
     try {
-      const date = new Date(dateString);
+      let date: Date;
+      const msMatch = dateString.match(/\.(\d{1,3})$/);
+      const cleanDateStr = msMatch ? dateString.substring(0, dateString.length - msMatch[0].length) : dateString;
+      date = new Date(cleanDateStr);
       if (isNaN(date.getTime())) {
         throw new Error('Invalid date');
+      }
+      if (msMatch) {
+        const ms = parseInt(msMatch[1].padEnd(3, '0'), 10);
+        date.setMilliseconds(ms);
       }
       let ts = date.getTime();
       if (timestampUnit === 's') {
@@ -70,12 +89,12 @@ export const DateTimeTool: React.FC = () => {
   };
 
   const useCurrentTime = () => {
-    let ts = currentTime;
-    if (timestampUnit === 's') {
-      ts = Math.floor(ts / 1000);
-    }
+    const tsMs = currentTime;
+    const ts = timestampUnit === 's' ? Math.floor(tsMs / 1000) : tsMs;
+    const date = new Date(tsMs);
     setTimestamp(ts.toString());
-    timestampToDate();
+    setDateString(formatDate(date, timestampUnit === 'ms'));
+    message.success('已获取当前时间');
   };
 
   return (
@@ -178,7 +197,7 @@ export const DateTimeTool: React.FC = () => {
           <Input
             value={dateString}
             onChange={(e) => setDateString(e.target.value)}
-            placeholder="如: 2024/01/01 12:00:00"
+            placeholder="如: 2024/01/01 12:00:00.000"
           />
         </div>
       </Space>

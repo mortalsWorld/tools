@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Input, Button, Space, message, Table, Alert, Divider, Statistic, Row, Col, Badge } from 'antd';
+import { Card, Input, Button, Space, message, Table, Alert, Divider, Statistic, Row, Col, Badge, Tag } from 'antd';
 import { SearchOutlined, ClearOutlined, CopyOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 
 const { TextArea } = Input;
@@ -160,7 +160,7 @@ function matchIP(targetIpStr: string, record: ParsedRecord): boolean {
 interface MatchResult {
   ip: string;
   status: 'match' | 'miss' | 'invalid';
-  matched: string;
+  matched: string[];
 }
 
 export const IPLookupTool: React.FC = () => {
@@ -207,20 +207,19 @@ export const IPLookupTool: React.FC = () => {
       const rawIp = ipLine.trim().replace(/^["'\s]+|["'\s]+$/g, '');
       if (!rawIp) return;
 
-      let found: string | null = null;
+      const matchedSubnets: string[] = [];
       for (const rec of parsedRecords) {
         if (matchIP(rawIp, rec)) {
-          found = rec.original;
-          break;
+          matchedSubnets.push(rec.original);
         }
       }
 
-      if (found) {
-        matchResults.push({ ip: rawIp, status: 'match', matched: found });
+      if (matchedSubnets.length > 0) {
+        matchResults.push({ ip: rawIp, status: 'match', matched: matchedSubnets });
       } else {
         const isValidIPv4 = ipv4ToUint32(rawIp) !== null;
         const isValidIPv6 = isIPv6(rawIp) && ipv6ToBigInt(rawIp) !== null;
-        matchResults.push({ ip: rawIp, status: isValidIPv4 || isValidIPv6 ? 'miss' : 'invalid', matched: '-' });
+        matchResults.push({ ip: rawIp, status: isValidIPv4 || isValidIPv6 ? 'miss' : 'invalid', matched: [] });
       }
     });
 
@@ -248,7 +247,7 @@ export const IPLookupTool: React.FC = () => {
   };
 
   const handleCopyResults = () => {
-    const text = results.map(r => `${r.ip}\t${r.status === 'match' ? '匹配' : r.status === 'miss' ? '未匹配' : '无效IP'}\t${r.matched}`).join('\n');
+    const text = results.map(r => `${r.ip}\t${r.status === 'match' ? '匹配' : r.status === 'miss' ? '未匹配' : '无效IP'}\t${r.matched.join('; ')}`).join('\n');
     navigator.clipboard.writeText(text);
     message.success('结果已复制到剪贴板');
   };
@@ -292,7 +291,18 @@ export const IPLookupTool: React.FC = () => {
       title: '匹配的子网',
       dataIndex: 'matched',
       key: 'matched',
-      render: (matched: string) => matched === '-' ? '-' : <code style={{ fontFamily: 'Monaco, Consolas, monospace', color: '#1890ff' }}>{matched}</code>,
+      render: (matched: string[]) => {
+        if (matched.length === 0) return '-';
+        return (
+          <Space size={[4, 4]} wrap>
+            {matched.map((m, idx) => (
+              <Tag key={idx} color="blue" style={{ fontFamily: 'Monaco, Consolas, monospace' }}>
+                {m}
+              </Tag>
+            ))}
+          </Space>
+        );
+      },
     },
   ];
 
