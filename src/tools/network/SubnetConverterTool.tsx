@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Card, Input, Button, Space, message, Descriptions, Tag, Divider, Alert } from 'antd';
-import { ReloadOutlined, CalculatorOutlined, DownloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined, CalculatorOutlined, ExportOutlined } from '@ant-design/icons';
 
 const { TextArea } = Input;
 
@@ -419,7 +419,7 @@ export const SubnetConverterTool: React.FC = () => {
               <Divider style={{ margin: 0, flex: 1 }}>转换结果</Divider>
               <Button
                 size="small"
-                icon={<DownloadOutlined />}
+                icon={<ExportOutlined />}
                 onClick={handleExportCSV}
                 style={{ marginLeft: '12px' }}
               >

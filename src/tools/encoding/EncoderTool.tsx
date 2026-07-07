@@ -24,8 +24,8 @@ export const EncoderTool: React.FC = () => {
 
   const decodeBase64 = () => {
     try {
-      const decoded = decodeURIComponent(escape(atob(encodedText)));
-      setPlainText(decoded);
+      const decoded = decodeURIComponent(escape(atob(plainText)));
+      setEncodedText(decoded);
       message.success('Base64 解码成功');
     } catch (e) {
       message.error('解码失败，Base64 格式错误');
@@ -45,8 +45,8 @@ export const EncoderTool: React.FC = () => {
 
   const decodeURL = () => {
     try {
-      const decoded = decodeURIComponent(encodedText);
-      setPlainText(decoded);
+      const decoded = decodeURIComponent(plainText);
+      setEncodedText(decoded);
       message.success('URL 解码成功');
     } catch (e) {
       message.error('解码失败');
@@ -68,10 +68,10 @@ export const EncoderTool: React.FC = () => {
 
   const decodeHex = () => {
     try {
-      const hexString = encodedText.replace(/\s/g, '');
+      const hexString = plainText.replace(/\s/g, '');
       const bytes = new Uint8Array(hexString.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
       const decoded = new TextDecoder().decode(bytes);
-      setPlainText(decoded);
+      setEncodedText(decoded);
       message.success('Hex 解码成功');
     } catch (e) {
       message.error('解码失败，Hex 格式错误');
@@ -94,10 +94,10 @@ export const EncoderTool: React.FC = () => {
 
   const decodeUnicode = () => {
     try {
-      const decoded = encodedText.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
+      const decoded = plainText.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
         String.fromCharCode(parseInt(hex, 16))
       );
-      setPlainText(decoded);
+      setEncodedText(decoded);
       message.success('Unicode 解码成功');
     } catch (e) {
       message.error('解码失败');
@@ -125,7 +125,7 @@ export const EncoderTool: React.FC = () => {
               <TextArea
                 value={plainText}
                 onChange={(e) => setPlainText(e.target.value)}
-                placeholder="输入要编码的文本..."
+                placeholder="输入要编码或解码的文本..."
                 style={{ borderRadius: 8, fontFamily: 'Monaco, Consolas, monospace' }}
                 rows={4}
               />
@@ -143,7 +143,7 @@ export const EncoderTool: React.FC = () => {
               <TextArea
                 value={encodedText}
                 onChange={(e) => setEncodedText(e.target.value)}
-                placeholder="编码结果..."
+                placeholder="编码/解码结果..."
                 style={{ borderRadius: 8, fontFamily: 'Monaco, Consolas, monospace' }}
                 rows={4}
               />
@@ -165,7 +165,7 @@ export const EncoderTool: React.FC = () => {
               <TextArea
                 value={plainText}
                 onChange={(e) => setPlainText(e.target.value)}
-                placeholder="输入要编码的文本..."
+                placeholder="输入要编码或解码的文本..."
                 style={{ borderRadius: 8, fontFamily: 'Monaco, Consolas, monospace' }}
                 rows={4}
               />
@@ -183,7 +183,7 @@ export const EncoderTool: React.FC = () => {
               <TextArea
                 value={encodedText}
                 onChange={(e) => setEncodedText(e.target.value)}
-                placeholder="编码结果..."
+                placeholder="编码/解码结果..."
                 style={{ borderRadius: 8, fontFamily: 'Monaco, Consolas, monospace' }}
                 rows={4}
               />
@@ -205,7 +205,7 @@ export const EncoderTool: React.FC = () => {
               <TextArea
                 value={plainText}
                 onChange={(e) => setPlainText(e.target.value)}
-                placeholder="输入要编码的文本..."
+                placeholder="输入要编码或解码的文本..."
                 style={{ borderRadius: 8, fontFamily: 'Monaco, Consolas, monospace' }}
                 rows={4}
               />
@@ -223,7 +223,7 @@ export const EncoderTool: React.FC = () => {
               <TextArea
                 value={encodedText}
                 onChange={(e) => setEncodedText(e.target.value)}
-                placeholder="编码结果..."
+                placeholder="编码/解码结果..."
                 style={{ borderRadius: 8, fontFamily: 'Monaco, Consolas, monospace' }}
                 rows={4}
               />
@@ -245,7 +245,7 @@ export const EncoderTool: React.FC = () => {
               <TextArea
                 value={plainText}
                 onChange={(e) => setPlainText(e.target.value)}
-                placeholder="输入要编码的文本..."
+                placeholder="输入要编码或解码的文本..."
                 style={{ borderRadius: 8, fontFamily: 'Monaco, Consolas, monospace' }}
                 rows={4}
               />
@@ -263,7 +263,7 @@ export const EncoderTool: React.FC = () => {
               <TextArea
                 value={encodedText}
                 onChange={(e) => setEncodedText(e.target.value)}
-                placeholder="编码结果..."
+                placeholder="编码/解码结果..."
                 style={{ borderRadius: 8, fontFamily: 'Monaco, Consolas, monospace' }}
                 rows={4}
               />
