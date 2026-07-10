@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/license-MIT--NC-yellow.svg)
 ![Electron](https://img.shields.io/badge/Electron-42.4.0-47848F?style=flat-square&logo=electron)
 ![React](https://img.shields.io/badge/React-19.2.7-61DAFB?style=flat-square&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.4.5-3178C6?style=flat-square&logo=typescript)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?style=flat-square&logo=typescript)
 
 ## 功能特性
 
@@ -46,12 +46,12 @@
 
 ## 技术栈
 
-- **前端框架**: React 19
-- **类型系统**: TypeScript 5.6
-- **桌面框架**: Electron 42.4
-- **UI 组件库**: Ant Design 6.4
-- **拖拽排序**: @dnd-kit
-- **构建工具**: Vite 8.0 + electron-builder
+- **前端框架**: React 19.2.7
+- **类型系统**: TypeScript 5.9.3
+- **桌面框架**: Electron 42.4.0
+- **UI 组件库**: Ant Design 6.4.4
+- **拖拽排序**: @dnd-kit 6.3.1
+- **构建工具**: Vite 8.0.16 + electron-builder 26.0.0
 
 ## 安全特性
 
@@ -131,8 +131,8 @@ npm run build
 ```
 
 构建完成后，安装包位于 `release/` 目录下：
-- `DevTools Setup 1.4.0.exe` - NSIS 安装包（约 100 MB）
-- `DevTools 1.4.0.exe` - 便携版（约 100 MB）
+- `DevTools Setup 1.5.0.exe` - NSIS 安装包（约 100 MB）
+- `DevTools 1.5.0.exe` - 便携版（约 100 MB）
 
 ### 安装说明
 
@@ -159,10 +159,11 @@ npm run build
 安装目录/
 ├── DevTools.exe           # 应用程序
 ├── config/                # 配置文件目录
-│   ├── app-config.json    # 应用配置
-│   ├── shortcuts.json     # 文件快速启动配置
-│   ├── websites.json       # 网页快速打开配置
-│   └── passwords.json     # 密码管理配置（已加密）
+│   ├── app-config.json    # 应用配置（主题、快捷键、备份配置、窗口行为等）
+│   ├── file-launcher.json # 文件快速启动配置
+│   ├── web-opener.json    # 网页快速打开配置
+│   ├── passwords.json     # 密码管理配置（已加密）
+│   └── backups/           # 配置备份目录
 └── logs/                  # 日志文件目录
 ```
 
@@ -188,8 +189,10 @@ npm run build
 
 ### 配置文件说明
 
-- `app-config.json` - 应用设置（主题、快捷键、备份配置、窗口行为等）
-- `passwords.json` - 密码管理配置（**已加密存储**）
+- `app-config.json` - 应用设置（主题、快捷键、备份配置、窗口行为、工具栏自定义等）
+- `file-launcher.json` - 文件快速启动配置（支持分组管理、拖拽排序）
+- `web-opener.json` - 网页快速打开配置（支持分组管理、拖拽排序）
+- `passwords.json` - 密码管理配置（**已加密存储**，支持分组管理）
 - `backups/` - 配置备份目录
 
 ## 开发指南

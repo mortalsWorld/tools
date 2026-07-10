@@ -1696,7 +1696,7 @@ async function createWindow() {
           click: () => {
             dialog.showMessageBox({
               title: '关于工具箱',
-              message: `工具箱 v${app.getVersion()}\n\n一个纯离线的通用工具集合，无需网络即可使用\n\n技术栈：\n- Electron ${process.versions.electron}\n- React 19\n- TypeScript 5.6\n- Ant Design 6.4\n- Vite 8.0\n\n代码仓库：\nhttps://gitee.com/hongchenshijie/tools`
+              message: `工具箱 v${app.getVersion()}\n\n一个纯离线的通用工具集合，无需网络即可使用\n\n技术栈：\n- Electron ${process.versions.electron}\n- React 19.2.7\n- TypeScript 5.9.3\n- Ant Design 6.4.4\n- Vite 8.0.16\n\n代码仓库：\nhttps://gitee.com/hongchenshijie/tools`
             })
           }
         }

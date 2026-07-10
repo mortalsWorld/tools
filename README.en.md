@@ -3,9 +3,9 @@
 A modern general-purpose tool collection desktop application, built with Electron + React + TypeScript.
 
 ![License](https://img.shields.io/badge/license-MIT--NC-yellow.svg)
-![Electron](https://img.shields.io/badge/Electron-31.7.7-47848F?style=flat-square&logo=electron)
-![React](https://img.shields.io/badge/React-18.3.1-61DAFB?style=flat-square&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.4.5-3178C6?style=flat-square&logo=typescript)
+![Electron](https://img.shields.io/badge/Electron-42.4.0-47848F?style=flat-square&logo=electron)
+![React](https://img.shields.io/badge/React-19.2.7-61DAFB?style=flat-square&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?style=flat-square&logo=typescript)
 
 ## Features
 
@@ -46,12 +46,12 @@ A modern general-purpose tool collection desktop application, built with Electro
 
 ## Tech Stack
 
-- **Frontend Framework**: React 18.3
-- **Type System**: TypeScript 5.4
-- **Desktop Framework**: Electron 31.7
-- **UI Component Library**: Ant Design 6.4
-- **Drag & Drop**: @dnd-kit
-- **Build Tools**: Vite 5.3 + electron-builder
+- **Frontend Framework**: React 19.2.7
+- **Type System**: TypeScript 5.9.3
+- **Desktop Framework**: Electron 42.4.0
+- **UI Component Library**: Ant Design 6.4.4
+- **Drag & Drop**: @dnd-kit 6.3.1
+- **Build Tools**: Vite 8.0.16 + electron-builder 26.0.0
 
 ## Project Structure
 
@@ -119,20 +119,34 @@ npm run build
 ```
 
 After building, the packages are located in the `release/` directory:
-- `DevTools Setup 1.0.0.exe` - NSIS installer
-- `DevTools 1.0.0.exe` - Portable version
+- `DevTools Setup 1.5.0.exe` - NSIS installer
+- `DevTools 1.5.0.exe` - Portable version
 
 ## Config Persistence
 
-Application configs are stored in the user data directory:
-- **Windows**: `%APPDATA%/toolbox/config/`
-- **macOS**: `~/Library/Application Support/toolbox/config/`
-- **Linux**: `~/.config/toolbox/config/`
+Application configs are stored in the **installation directory** under the `config/` subdirectory:
 
-Configs for each tool are stored in JSON format:
-- `shortcuts.json` - File launcher config
-- `websites.json` - Web opener config
-- `passwords.json` - Password manager config
+```
+installation-directory/
+├── DevTools.exe           # Application
+├── config/                # Config directory
+│   ├── app-config.json    # App settings (theme, shortcuts, backup, window behavior, etc.)
+│   ├── file-launcher.json # File launcher config
+│   ├── web-opener.json    # Web opener config
+│   ├── passwords.json     # Password manager config (encrypted)
+│   └── backups/           # Config backup directory
+└── logs/                  # Log files directory
+```
+
+**Note**: Config files move with the installation directory. Uninstalling the app will not delete configs (manual deletion of the installation directory is required).
+
+### Config Files
+
+- `app-config.json` - App settings (theme, shortcuts, backup config, window behavior, toolbar customization, etc.)
+- `file-launcher.json` - File launcher config (supports group management, drag-to-sort)
+- `web-opener.json` - Web opener config (supports group management, drag-to-sort)
+- `passwords.json` - Password manager config (**encrypted storage**, supports group management)
+- `backups/` - Config backup directory
 
 ## Development Guide
 
