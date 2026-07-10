@@ -1387,7 +1387,11 @@ async function loadAppConfig() {
   logger.info('loadAppConfig: 加载应用配置')
   try {
     const config = await loadConfig('app-config.json')
-    appConfig = config || { ...DEFAULT_APP_CONFIG }
+    if (config) {
+      appConfig = { ...DEFAULT_APP_CONFIG, ...config }
+    } else {
+      appConfig = { ...DEFAULT_APP_CONFIG }
+    }
     logger.debug('loadAppConfig: 配置内容:', appConfig)
     return appConfig
   } catch (error) {
@@ -1422,7 +1426,7 @@ async function saveAppConfig(config: any) {
   const oldBackupDir = getBackupDir()
   
   logger.info(`saveAppConfig: 开始处理, CONFIG_PATH=${CONFIG_PATH}, closeToMinimize=${config?.closeToMinimize}`)
-  appConfig = config
+  appConfig = { ...DEFAULT_APP_CONFIG, ...config }
   
   if (appConfig.configDir) {
     if (!fs.existsSync(appConfig.configDir)) {
@@ -1478,21 +1482,22 @@ async function saveAppConfig(config: any) {
  */
 function registerShortcuts(shortcuts: any) {
   globalShortcut.unregisterAll()
-  if (!shortcuts) return
 
-  Object.entries(shortcuts).forEach(([toolId, accelerator]) => {
-    if (accelerator && typeof accelerator === 'string' && isValidAccelerator(accelerator)) {
-      try {
-        globalShortcut.register(accelerator, () => {
-          if (win) {
-            win.webContents.send('shortcut-triggered', toolId)
-          }
-        })
-      } catch (error) {
-        logger.warn(`registerShortcuts: 注册 ${toolId} 快捷键失败:`, error instanceof Error ? error.message : String(error))
+  if (shortcuts && typeof shortcuts === 'object') {
+    Object.entries(shortcuts).forEach(([toolId, accelerator]) => {
+      if (accelerator && typeof accelerator === 'string' && isValidAccelerator(accelerator)) {
+        try {
+          globalShortcut.register(accelerator, () => {
+            if (win) {
+              win.webContents.send('shortcut-triggered', toolId)
+            }
+          })
+        } catch (error) {
+          logger.warn(`registerShortcuts: 注册 ${toolId} 快捷键失败:`, error instanceof Error ? error.message : String(error))
+        }
       }
-    }
-  })
+    })
+  }
 
   const windowShortcut = appConfig?.windowShortcut || DEFAULT_APP_CONFIG.windowShortcut
   if (windowShortcut && typeof windowShortcut === 'string' && isValidAccelerator(windowShortcut)) {
@@ -1631,6 +1636,9 @@ async function createWindow() {
     
     // 后台执行备份检查
     shouldBackupNow()
+    
+    // 配置加载完成后重新注册快捷键（包括窗口显示/隐藏快捷键）
+    registerShortcuts(appConfig.shortcuts)
     
     logger.info('[MAIN] 后台初始化完成')
   }).catch((err) => {
