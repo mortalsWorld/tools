@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Row, Col, Divider, Empty } from 'antd';
+import { Card, Typography, Row, Col, Divider, Empty, theme } from 'antd';
 import { 
   ToolOutlined, 
   CodeOutlined, 
@@ -36,6 +36,7 @@ interface FavoriteTool {
 
 export const WelcomeTool: React.FC<{ onNavigate: (toolId: string) => void }> = ({ onNavigate }) => {
   const [favoriteTools, setFavoriteTools] = useState<FavoriteTool[]>([]);
+  const { token } = theme.useToken();
 
   useEffect(() => {
     const loadFavorites = async () => {
@@ -202,37 +203,37 @@ export const WelcomeTool: React.FC<{ onNavigate: (toolId: string) => void }> = (
             {favoriteTools.map((tool) => (
               <Col xs={24} sm={8} key={tool.id}>
                 <Card 
-                  hoverable
-                  style={{ 
-                    borderRadius: 14, 
-                    border: '1px solid #e8e8e8',
-                    cursor: 'pointer',
-                    transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-                    height: '100%'
-                  }}
-                  styles={{ body: { padding: 18 } }}
-                  onClick={() => onNavigate(tool.id)}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ 
-                      width: 44, 
-                      height: 44, 
-                      background: tool.gradient,
-                      borderRadius: 12,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)'
-                    }}>
-                      {tool.icon}
-                    </div>
-                    <div>
-                      <Title level={5} style={{ margin: 0, fontSize: 15, fontWeight: 500 }}>{tool.name}</Title>
-                      <Paragraph style={{ marginTop: 2, marginRight: 0, marginBottom: 0, marginLeft: 0, color: '#888', fontSize: 12 }}>
-                        {tool.description}
-                      </Paragraph>
-                    </div>
-                  </div>
+              hoverable
+              style={{ 
+                borderRadius: 14, 
+                border: `1px solid ${token.colorBorder}`,
+                cursor: 'pointer',
+                transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+                height: '100%'
+              }}
+              styles={{ body: { padding: 18 } }}
+              onClick={() => onNavigate(tool.id)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ 
+                  width: 44, 
+                  height: 44, 
+                  background: tool.gradient,
+                  borderRadius: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)'
+                }}>
+                  {tool.icon}
+                </div>
+                <div>
+                  <Title level={5} style={{ margin: 0, fontSize: 15, fontWeight: 500, color: token.colorTextHeading }}>{tool.name}</Title>
+                  <Paragraph style={{ marginTop: 2, marginRight: 0, marginBottom: 0, marginLeft: 0, color: token.colorTextSecondary, fontSize: 12 }}>
+                    {tool.description}
+                  </Paragraph>
+                </div>
+              </div>
                   <style>{`
                     .ant-card-hoverable:hover {
                       border-color: #667eea !important;
@@ -248,8 +249,8 @@ export const WelcomeTool: React.FC<{ onNavigate: (toolId: string) => void }> = (
           <Card 
             style={{ 
               borderRadius: 14, 
-              border: '1px dashed #d9d9d9',
-              background: '#fafafa',
+              border: `1px dashed ${token.colorBorder}`,
+              background: token.colorBgContainer,
               textAlign: 'center',
               padding: '32px'
             }}
@@ -257,8 +258,8 @@ export const WelcomeTool: React.FC<{ onNavigate: (toolId: string) => void }> = (
             <Empty 
               description={
                 <div>
-                  <p style={{ marginBottom: 8 }}>暂无收藏的工具</p>
-                  <p style={{ fontSize: 13, color: '#999' }}>在设置中添加收藏工具，将显示在这里</p>
+                  <p style={{ marginBottom: 8, color: token.colorText }}>暂无收藏的工具</p>
+                  <p style={{ fontSize: 13, color: token.colorTextSecondary }}>在设置中添加收藏工具，将显示在这里</p>
                 </div>
               }
             />
@@ -274,7 +275,7 @@ export const WelcomeTool: React.FC<{ onNavigate: (toolId: string) => void }> = (
               hoverable
               style={{ 
                 borderRadius: 16, 
-                border: '1px solid #f0f0f0',
+                border: `1px solid ${token.colorBorder}`,
                 cursor: 'pointer',
                 transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
                 height: '100%'
@@ -301,17 +302,17 @@ export const WelcomeTool: React.FC<{ onNavigate: (toolId: string) => void }> = (
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Title level={4} style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{category.name}</Title>
+                    <Title level={4} style={{ margin: 0, fontSize: 16, fontWeight: 600, color: token.colorTextHeading }}>{category.name}</Title>
                     <ArrowRightOutlined 
                       style={{ 
                         fontSize: 16, 
-                        color: '#999',
+                        color: token.colorTextSecondary,
                         opacity: 0,
                         transition: 'opacity 0.3s ease'
                       }} 
                     />
                   </div>
-                  <Paragraph style={{ marginTop: 4, marginRight: 0, marginBottom: 0, marginLeft: 0, color: '#666', fontSize: 13 }}>
+                  <Paragraph style={{ marginTop: 4, marginRight: 0, marginBottom: 0, marginLeft: 0, color: token.colorTextSecondary, fontSize: 13 }}>
                     {category.description}
                   </Paragraph>
                 </div>
@@ -338,10 +339,10 @@ export const WelcomeTool: React.FC<{ onNavigate: (toolId: string) => void }> = (
         ))}
       </Row>
 
-      <Divider style={{ margin: '8px 0 24px', borderColor: '#f0f0f0' }} />
+      <Divider style={{ margin: '8px 0 24px', borderColor: token.colorBorder }} />
 
-      <Card style={{ borderRadius: 16, border: '1px solid #f0f0f0', background: '#fafafa' }}>
-        <Title level={3} style={{ marginBottom: 20, fontSize: 18, fontWeight: 600 }}>使用说明</Title>
+      <Card style={{ borderRadius: 16, border: `1px solid ${token.colorBorder}`, background: token.colorBgContainer }}>
+        <Title level={3} style={{ marginBottom: 20, fontSize: 18, fontWeight: 600, color: token.colorTextHeading }}>使用说明</Title>
         <Row gutter={[24, 24]}>
           <Col xs={24} md={12}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
@@ -359,8 +360,8 @@ export const WelcomeTool: React.FC<{ onNavigate: (toolId: string) => void }> = (
                 <span style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>1</span>
               </div>
               <div>
-                <Title level={5} style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>选择工具</Title>
-                <Paragraph style={{ marginTop: 6, marginRight: 0, marginBottom: 0, marginLeft: 0, color: '#666', fontSize: 13 }}>
+                <Title level={5} style={{ margin: 0, fontSize: 14, fontWeight: 600, color: token.colorTextHeading }}>选择工具</Title>
+                <Paragraph style={{ marginTop: 6, marginRight: 0, marginBottom: 0, marginLeft: 0, color: token.colorTextSecondary, fontSize: 13 }}>
                   从左侧导航栏选择需要使用的工具，或点击上方卡片快速跳转
                 </Paragraph>
               </div>
@@ -382,8 +383,8 @@ export const WelcomeTool: React.FC<{ onNavigate: (toolId: string) => void }> = (
                 <span style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>2</span>
               </div>
               <div>
-                <Title level={5} style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>收藏工具</Title>
-                <Paragraph style={{ marginTop: 6, marginRight: 0, marginBottom: 0, marginLeft: 0, color: '#666', fontSize: 13 }}>
+                <Title level={5} style={{ margin: 0, fontSize: 14, fontWeight: 600, color: token.colorTextHeading }}>收藏工具</Title>
+                <Paragraph style={{ marginTop: 6, marginRight: 0, marginBottom: 0, marginLeft: 0, color: token.colorTextSecondary, fontSize: 13 }}>
                   在设置页面的工具栏自定义中收藏常用工具，方便快速访问
                 </Paragraph>
               </div>

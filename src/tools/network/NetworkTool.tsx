@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Descriptions, Button, message, Alert, Tag, Collapse } from 'antd';
+import { Card, Row, Col, Descriptions, Button, message, Alert, Tag, Collapse, theme } from 'antd';
 import { ReloadOutlined, GlobalOutlined, EnvironmentOutlined, WifiOutlined, HomeOutlined } from '@ant-design/icons';
 const { Panel } = Collapse;
 
@@ -19,6 +19,7 @@ interface LocalNetworkInfo {
 }
 
 export const NetworkTool: React.FC = () => {
+  const { token } = theme.useToken();
   const [ipInfo, setIpInfo] = useState<IPInfo | null>(null);
   const [localNetworkInfo, setLocalNetworkInfo] = useState<LocalNetworkInfo>({ ipv4: [], ipv6: [] });
   const [loading, setLoading] = useState(false);
@@ -300,11 +301,11 @@ export const NetworkTool: React.FC = () => {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', wordBreak: 'break-all' }}>
                         {localNetworkInfo.ipv6.map((ip, index) => (
                           <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: '4px', wordBreak: 'break-all' }}>
-                            <span style={{ color: '#666', fontSize: '13px' }}>IPv6 {index + 1}:</span>
+                            <span style={{ color: token.colorTextSecondary, fontSize: '13px' }}>IPv6 {index + 1}:</span>
                             <code style={{ 
                               wordBreak: 'break-all', 
                               padding: '4px 8px', 
-                              background: '#f5f5f5', 
+                              background: token.colorBgContainer, 
                               borderRadius: '4px', 
                               fontSize: '12px',
                               display: 'block'

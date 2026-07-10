@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Input, Button, Space, message, Table, Alert, Divider, Statistic, Row, Col, Badge, Tag } from 'antd';
+import { Card, Input, Button, Space, message, Table, Alert, Divider, Statistic, Row, Col, Badge, Tag, theme } from 'antd';
 import { SearchOutlined, ClearOutlined, CopyOutlined, DownloadOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 
 const { TextArea } = Input;
@@ -164,6 +164,7 @@ interface MatchResult {
 }
 
 export const IPLookupTool: React.FC = () => {
+  const { token } = theme.useToken();
   const [ipList, setIpList] = useState('');
   const [subnetList, setSubnetList] = useState('');
   const [results, setResults] = useState<MatchResult[]>([]);
@@ -429,11 +430,11 @@ export const IPLookupTool: React.FC = () => {
                     fontSize: '13px',
                     fontFamily: "'Monaco', 'Menlo', monospace"
                   }}>
-                    <span style={{ color: '#999', marginRight: '8px' }}>第{err.lineNo}行:</span>
-                    <span style={{ background: '#ffeaea', padding: '2px 6px', borderRadius: '4px', marginRight: '8px' }}>
+                    <span style={{ color: token.colorTextSecondary, marginRight: '8px' }}>第{err.lineNo}行:</span>
+                    <span style={{ background: token.colorErrorBg, padding: '2px 6px', borderRadius: '4px', marginRight: '8px' }}>
                       {err.content}
                     </span>
-                    <span style={{ color: '#c0392b', fontWeight: 'bold' }}>{err.reason}</span>
+                    <span style={{ color: token.colorError, fontWeight: 'bold' }}>{err.reason}</span>
                   </div>
                 ))}
               </div>

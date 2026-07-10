@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Table, Button, Input, Space, Tag, message, Modal, Descriptions, Progress, Row, Col, Typography, Checkbox, Radio } from 'antd'
+import { Card, Table, Button, Input, Space, Tag, message, Modal, Descriptions, Progress, Row, Col, Typography, Checkbox, Radio, theme } from 'antd'
 import { ReloadOutlined, DeleteOutlined, SearchOutlined, FileSearchOutlined } from '@ant-design/icons'
 
 const { Title, Text } = Typography
@@ -36,6 +36,7 @@ const formatBytes = (bytes: number): string => {
 }
 
 export const ProcessTool: React.FC = () => {
+  const { token } = theme.useToken();
   const [processes, setProcesses] = useState<ProcessInfo[]>([])
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
   const [loading, setLoading] = useState(false)
@@ -422,7 +423,7 @@ export const ProcessTool: React.FC = () => {
         }
       >
         {fileHandles.length > 0 && (
-          <div style={{ marginBottom: 16, padding: '8px 12px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: 4 }}>
+          <div style={{ marginBottom: 16, padding: '8px 12px', background: token.colorWarningBg, border: `1px solid ${token.colorWarningBorder}`, borderRadius: 4 }}>
             <Text>找到 <strong>{fileHandles.length}</strong> 个占用该文件的进程，已在下方列表中标红显示</Text>
           </div>
         )}
