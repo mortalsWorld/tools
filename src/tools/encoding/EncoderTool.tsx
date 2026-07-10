@@ -138,7 +138,7 @@ export const EncoderTool: React.FC = () => {
             </div>
             <div>
               <div style={{ marginBottom: 8, fontWeight: 600, color: token.colorTextHeading }}>
-                编码结果
+                结果
               </div>
               <TextArea
                 value={encodedText}
@@ -178,7 +178,7 @@ export const EncoderTool: React.FC = () => {
             </div>
             <div>
               <div style={{ marginBottom: 8, fontWeight: 600, color: token.colorTextHeading }}>
-                编码结果
+                结果
               </div>
               <TextArea
                 value={encodedText}
@@ -218,7 +218,7 @@ export const EncoderTool: React.FC = () => {
             </div>
             <div>
               <div style={{ marginBottom: 8, fontWeight: 600, color: token.colorTextHeading }}>
-                编码结果
+                结果
               </div>
               <TextArea
                 value={encodedText}
@@ -258,7 +258,7 @@ export const EncoderTool: React.FC = () => {
             </div>
             <div>
               <div style={{ marginBottom: 8, fontWeight: 600, color: token.colorTextHeading }}>
-                编码结果
+                结果
               </div>
               <TextArea
                 value={encodedText}
