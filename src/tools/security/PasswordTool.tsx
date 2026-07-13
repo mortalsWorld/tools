@@ -381,39 +381,55 @@ export const PasswordTool: React.FC = () => {
         setGeneratedPassword(password);
         message.success('密码已生成');
       } else {
-        const chars = [];
-        if (genIncludeLowercase) chars.push('abcdefghijklmnopqrstuvwxyz');
-        if (genIncludeUppercase) chars.push('ABCDEFGHIJKLMNOPQRSTUVWXYZ');
-        if (genIncludeNumbers) chars.push('0123456789');
-        if (genIncludeSymbols) chars.push((genCustomSymbols.length > 0 ? genCustomSymbols : commonSymbols).join(''));
-        const pool = chars.join('');
-        if (pool.length === 0) {
-          message.warning('至少选择一种字符类型');
-          return;
+          const charSets: string[] = [];
+          if (genIncludeLowercase) charSets.push('abcdefghijklmnopqrstuvwxyz');
+          if (genIncludeUppercase) charSets.push('ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+          if (genIncludeNumbers) charSets.push('0123456789');
+          if (genIncludeSymbols) charSets.push((genCustomSymbols.length > 0 ? genCustomSymbols : commonSymbols).join(''));
+          const pool = charSets.join('');
+          if (pool.length === 0) {
+            message.warning('至少选择一种字符类型');
+            return;
+          }
+          if (genLength < charSets.length) {
+            message.warning(`密码长度至少需要${charSets.length}位以包含所有选中的字符类型`);
+            return;
+          }
+          let pwd = '';
+          for (const set of charSets) {
+            pwd += set.charAt(Math.floor(Math.random() * set.length));
+          }
+          for (let i = charSets.length; i < genLength; i++) {
+            pwd += pool.charAt(Math.floor(Math.random() * pool.length));
+          }
+          pwd = pwd.split('').sort(() => Math.random() - 0.5).join('');
+          setGeneratedPassword(pwd);
+          message.success('密码已生成');
         }
-        let pwd = '';
-        for (let i = 0; i < genLength; i++) {
-          pwd += pool.charAt(Math.floor(Math.random() * pool.length));
-        }
-        setGeneratedPassword(pwd);
-        message.success('密码已生成');
-      }
     } catch (error) {
       console.error('Generate password error:', error);
-      const chars = [];
-      if (genIncludeLowercase) chars.push('abcdefghijklmnopqrstuvwxyz');
-      if (genIncludeUppercase) chars.push('ABCDEFGHIJKLMNOPQRSTUVWXYZ');
-      if (genIncludeNumbers) chars.push('0123456789');
-      if (genIncludeSymbols) chars.push((genCustomSymbols.length > 0 ? genCustomSymbols : commonSymbols).join(''));
-      const pool = chars.join('');
+      const charSets: string[] = [];
+      if (genIncludeLowercase) charSets.push('abcdefghijklmnopqrstuvwxyz');
+      if (genIncludeUppercase) charSets.push('ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+      if (genIncludeNumbers) charSets.push('0123456789');
+      if (genIncludeSymbols) charSets.push((genCustomSymbols.length > 0 ? genCustomSymbols : commonSymbols).join(''));
+      const pool = charSets.join('');
       if (pool.length === 0) {
         message.warning('至少选择一种字符类型');
         return;
       }
+      if (genLength < charSets.length) {
+        message.warning(`密码长度至少需要${charSets.length}位以包含所有选中的字符类型`);
+        return;
+      }
       let pwd = '';
-      for (let i = 0; i < genLength; i++) {
+      for (const set of charSets) {
+        pwd += set.charAt(Math.floor(Math.random() * set.length));
+      }
+      for (let i = charSets.length; i < genLength; i++) {
         pwd += pool.charAt(Math.floor(Math.random() * pool.length));
       }
+      pwd = pwd.split('').sort(() => Math.random() - 0.5).join('');
       setGeneratedPassword(pwd);
       message.success('密码已生成');
     }
@@ -939,10 +955,37 @@ export const PasswordTool: React.FC = () => {
                 </div>
                 <div>
                   <div style={{ marginBottom: 8, fontWeight: 500 }}>密码 *</div>
-                  <Input.Password
-                    value={editingItem.password}
-                    onChange={(e) => setEditingItem(prev => prev ? ({ ...prev, password: e.target.value }) : null)}
-                  />
+                  <Space.Compact style={{ width: '100%' }}>
+                    <Input.Password
+                      value={editingItem.password}
+                      onChange={(e) => setEditingItem(prev => prev ? ({ ...prev, password: e.target.value }) : null)}
+                      style={{ flex: 1 }}
+                    />
+                    <Button
+                      icon={<SafetyOutlined />}
+                      onClick={() => {
+                        setGenLength(16);
+                        setGenIncludeNumbers(true);
+                        setGenIncludeSymbols(true);
+                        setGenIncludeUppercase(true);
+                        setGenIncludeLowercase(true);
+                        setGenCustomSymbols([]);
+                        setIsGeneratorModalVisible(true);
+                      }}
+                    >
+                      生成
+                    </Button>
+                    {generatedPassword && isGeneratorModalVisible === false && (
+                      <Button
+                        icon={<CopyOutlined />}
+                        onClick={() => {
+                          setEditingItem(prev => prev ? ({ ...prev, password: generatedPassword }) : null);
+                        }}
+                      >
+                        填入
+                      </Button>
+                    )}
+                  </Space.Compact>
                 </div>
                 <div>
                   <div style={{ marginBottom: 8, fontWeight: 500 }}>网址（可选）</div>
@@ -1100,14 +1143,22 @@ export const PasswordTool: React.FC = () => {
                       }}>
                         复制
                       </Button>
-                      {isAddModalVisible === false && (
+                      {isAddModalVisible && (
                         <Button size="small" onClick={() => {
-                          if (newItem.id) {
-                            setNewItem(prev => ({ ...prev, password: generatedPassword }));
-                          }
-                          message.info('已生成本地密码，可粘贴到编辑框中');
+                          setNewItem(prev => ({ ...prev, password: generatedPassword }));
+                          setIsGeneratorModalVisible(false);
+                          message.success('已填入新密码');
                         }}>
                           准备用于新密码
+                        </Button>
+                      )}
+                      {isEditModalVisible && (
+                        <Button size="small" onClick={() => {
+                          setEditingItem(prev => prev ? ({ ...prev, password: generatedPassword }) : null);
+                          setIsGeneratorModalVisible(false);
+                          message.success('已填入编辑密码');
+                        }}>
+                          准备用于编辑密码
                         </Button>
                       )}
                     </Space>
