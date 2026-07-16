@@ -4,10 +4,13 @@ import MarkdownIt from 'markdown-it';
 import { useTheme } from '../../context/ThemeContext';
 
 const { TextArea } = Input;
-// 安全配置：禁用原始 HTML 以防止 XSS 攻击
-// 用户输入的 Markdown 只会渲染为安全的文本格式
+// 安全说明：
+// 1. html: false 禁用原始 HTML 渲染，防止 XSS 攻击
+// 2. 用户输入的 Markdown 只渲染为纯文本格式，所有 HTML 标签都会被转义
+// 3. 即使使用 dangerouslySetInnerHTML，由于 html: false，不会产生 XSS 风险
+// 4. 如需支持原始 HTML，必须先使用 DOMPurify 等库进行 XSS 过滤
 const md = new MarkdownIt({
-  html: false,  // 禁用原始 HTML - 安全最佳实践
+  html: false,  // 关键安全设置：禁止渲染原始 HTML，防止 XSS
   breaks: true,
   linkify: true,
 });

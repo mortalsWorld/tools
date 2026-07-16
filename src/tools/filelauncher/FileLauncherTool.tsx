@@ -228,6 +228,19 @@ const FileLauncherTool: React.FC = () => {
         
         if (iconResult.base64 && iconResult.base64.length > 0) {
           const base64Data = iconResult.base64;
+          
+          // 安全验证：确保图标数据只包含合法的 base64 字符
+          // 提取 base64 内容（去掉 data:image 前缀）
+          let base64Content = base64Data;
+          if (base64Data.includes(',')) {
+            base64Content = base64Data.split(',')[1] || base64Data;
+          }
+          // 验证 base64 格式（只允许 A-Z, a-z, 0-9, +, /, =）
+          if (!/^[A-Za-z0-9+/=\s]+$/.test(base64Content)) {
+            console.warn('[fetchFileIcon] 图标数据包含非法字符，拒绝使用');
+            return undefined;
+          }
+          
           const hasDataPrefix = base64Data.startsWith('data:image');
           
           if (!hasDataPrefix) {

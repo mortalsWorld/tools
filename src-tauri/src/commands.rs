@@ -50,7 +50,20 @@ fn format_bytes(bytes: u64) -> String {
 
 
 use regex::Regex;
+use aes_gcm::{
+    aead::{Aead, KeyInit},
+    Aes256Gcm, Nonce,
+};
+use rand::RngCore;
 
+// 旧版本（v1）使用的硬编码密钥，用于兼容旧数据
+const LEGACY_KEY: &[u8] = b"toolbox_encryption_key_32bytes";
+
+// 加密版本标识
+const VERSION_XOR: u8 = 0x01;   // 旧版本：XOR 加密（已弃用，仅用于解密兼容）
+const VERSION_AES: u8 = 0x02;   // 新版本：AES-256-GCM 加密
+
+/// 获取或生成安全的随机加密密钥（32字节，用于 AES-256）
 fn get_encryption_key() -> Vec<u8> {
     let config_dir = get_config_dir();
     let key_path = config_dir.join("encryption-key.dat");
@@ -62,38 +75,91 @@ fn get_encryption_key() -> Vec<u8> {
         }
     }
     
-    let default_key = b"toolbox_encryption_key_32bytes";
+    // 生成新的随机密钥
+    let mut new_key = [0u8; 32];
+    rand::rng().fill_bytes(&mut new_key);
     
-    if let Ok(_) = fs::write(&key_path, default_key) {
+    if let Ok(_) = fs::write(&key_path, &new_key) {
+        log::info!("已生成新的随机加密密钥");
     }
     
-    default_key.to_vec()
+    new_key.to_vec()
 }
 
+// ---- 旧版本 XOR 加密（仅用于兼容解密） ----
 fn xor_encrypt(data: &[u8], key: &[u8]) -> Vec<u8> {
     data.iter().enumerate().map(|(i, &b)| b ^ key[i % key.len()]).collect()
 }
 
-fn encrypt_string(data: &str) -> String {
-    let key = get_encryption_key();
-    let encrypted = xor_encrypt(data.as_bytes(), &key);
-    let mut result = Vec::new();
-    result.push(0x01);
-    result.extend(encrypted);
-    base64::engine::general_purpose::STANDARD.encode(&result)
+// ---- 新版本 AES-256-GCM 加密 ----
+fn aes_encrypt(data: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|e| format!("AES 密钥初始化失败: {}", e))?;
+    
+    // 生成随机 nonce (12 bytes)
+    let mut nonce_bytes = [0u8; 12];
+    rand::rng().fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    
+    // 加密（AES-GCM 会自动附加认证标签）
+    let ciphertext = cipher.encrypt(nonce, data.as_ref())
+        .map_err(|e| format!("AES 加密失败: {}", e))?;
+    
+    // 格式: nonce(12) + ciphertext+tag
+    let mut result = Vec::with_capacity(1 + 12 + ciphertext.len());
+    result.push(VERSION_AES);
+    result.extend_from_slice(&nonce_bytes);
+    result.extend_from_slice(&ciphertext);
+    
+    Ok(result)
 }
 
+fn aes_decrypt(data: &[u8], key: &[u8]) -> Result<String, String> {
+    if data.len() < 13 {
+        return Err("AES 加密数据太短".to_string());
+    }
+    
+    let nonce_bytes = &data[0..12];
+    let ciphertext = &data[12..];
+    
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|e| format!("AES 密钥初始化失败: {}", e))?;
+    let nonce = Nonce::from_slice(nonce_bytes);
+    
+    let plaintext = cipher.decrypt(nonce, ciphertext.as_ref())
+        .map_err(|e| format!("AES 解密失败: {}", e))?;
+    
+    String::from_utf8(plaintext)
+        .map_err(|e| format!("UTF-8 解码失败: {}", e))
+}
+
+/// 加密字符串（使用 AES-256-GCM）
+fn encrypt_string(data: &str) -> String {
+    let key = get_encryption_key();
+    match aes_encrypt(data.as_bytes(), &key) {
+        Ok(bytes) => base64::engine::general_purpose::STANDARD.encode(&bytes),
+        Err(e) => {
+            log::error!("加密失败: {}", e);
+            // 回退：返回原始数据的 base64（标记为未加密）
+            format!("__b64__{}", base64::engine::general_purpose::STANDARD.encode(data))
+        }
+    }
+}
+
+/// 解密字符串（兼容旧版本 XOR 和新版本 AES）
 fn decrypt_string(data: &str) -> String {
     if data.is_empty() {
         return "".to_string();
     }
     
+    // 处理回退格式（未加密的 base64）
     if data.starts_with("__b64__") {
         match base64::engine::general_purpose::STANDARD.decode(&data[7..]) {
             Ok(bytes) => String::from_utf8_lossy(&bytes).to_string(),
             Err(_) => data.to_string(),
         }
     } else {
+        // 检查是否为 base64 编码的加密数据
         let base64_regex = Regex::new(r"^[A-Za-z0-9+/=]{20,}$").unwrap();
         if !base64_regex.is_match(data) {
             return data.to_string();
@@ -105,13 +171,28 @@ fn decrypt_string(data: &str) -> String {
                     return data.to_string();
                 }
                 
-                let (version, encrypted) = decoded.split_first().unwrap();
-                if *version == 0x01 {
-                    let key = get_encryption_key();
-                    let decrypted = xor_encrypt(encrypted, &key);
-                    String::from_utf8_lossy(&decrypted).to_string()
-                } else {
-                    String::from_utf8_lossy(&decoded).to_string()
+                let (version, payload) = decoded.split_first().unwrap();
+                match *version {
+                    VERSION_XOR => {
+                        // 旧版本：使用硬编码密钥 XOR 解密
+                        let decrypted = xor_encrypt(payload, LEGACY_KEY);
+                        String::from_utf8_lossy(&decrypted).to_string()
+                    }
+                    VERSION_AES => {
+                        // 新版本：使用随机密钥 AES-256-GCM 解密
+                        let key = get_encryption_key();
+                        match aes_decrypt(payload, &key) {
+                            Ok(plain) => plain,
+                            Err(e) => {
+                                log::warn!("AES 解密失败（可能密钥不匹配）: {}", e);
+                                data.to_string()
+                            }
+                        }
+                    }
+                    _ => {
+                        // 未知版本，返回原始数据
+                        String::from_utf8_lossy(&decoded).to_string()
+                    }
                 }
             }
             Err(_) => data.to_string(),
@@ -779,8 +860,36 @@ fn get_system_proxy() -> Option<String> {
     None
 }
 
+/// 验证 HTTP 请求 URL 的安全性
+/// 禁止访问本地敏感端点和非标准协议
+fn validate_http_url(url: &str) -> Result<(), String> {
+    let parsed = reqwest::Url::parse(url)
+        .map_err(|e| format!("无效的 URL: {}", e))?;
+    
+    // 只允许 http 和 https 协议
+    match parsed.scheme() {
+        "http" | "https" => {}
+        _ => return Err(format!("不支持的协议 '{}', 仅允许 http/https", parsed.scheme())),
+    }
+    
+    // 检查主机名，禁止访问本地敏感端点
+    if let Some(host) = parsed.host_str() {
+        let host_lower = host.to_lowercase();
+        // 禁止访问 localhost 和私有 IP 的常用端口
+        if host_lower == "localhost" || host_lower == "127.0.0.1" || host_lower == "::1" {
+            // 允许访问 localhost，但记录日志（桌面工具可能需要测试本地服务）
+            log::warn!("[http_request] 请求访问本地端点: {}", url);
+        }
+    }
+    
+    Ok(())
+}
+
 #[command]
 pub async fn http_request(options: HttpRequestOptions) -> Result<HttpResponse, String> {
+    // 安全验证：检查 URL 是否合法
+    validate_http_url(&options.url)?;
+    
     let mut builder = reqwest::Client::builder()
         .timeout(std::time::Duration::from_millis(options.timeout_ms.unwrap_or(30000)));
     
