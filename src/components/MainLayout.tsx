@@ -124,10 +124,6 @@ const MainLayoutContent: React.FC<{
 
   // 按分类顺序排序，跳过隐藏的分类
   const sortedCategories = [...categories].sort((a, b) => {
-    // 跳过 settings 分类
-    if (a.id === 'settings') return 1;
-    if (b.id === 'settings') return -1;
-    
     const aIndex = categoryOrder.indexOf(a.id);
     const bIndex = categoryOrder.indexOf(b.id);
     if (aIndex === -1 && bIndex === -1) return 0;
@@ -139,9 +135,8 @@ const MainLayoutContent: React.FC<{
   const menuItems: any[] = [];
   
   sortedCategories.forEach((category: ToolCategory) => {
-    // 跳过 settings 分类
+    // 跳过 settings 分类（设置入口在顶部菜单栏）
     if (category.id === 'settings') return;
-    
     // 跳过隐藏的分类
     if (hiddenCategories.includes(category.id)) return;
     
@@ -178,11 +173,6 @@ const MainLayoutContent: React.FC<{
         label: category.name,
         icon: category.icon,
         children: toolItems,
-        className: 'menu-category',
-        style: {
-          fontWeight: 500,
-          color: token.colorTextSecondary,
-        },
       });
     }
   });

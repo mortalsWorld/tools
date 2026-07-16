@@ -1,0 +1,44 @@
+[package]
+name = "app"
+version = "1.6.0"
+description = "工具箱 - 基于 Tauri 的轻量级通用工具集合"
+authors = ["you"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.11.3", features = ["devtools"] }
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-global-shortcut = "2"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+dirs = "6"
+uuid = { version = "1", features = ["v4"] }
+rand = "0.9"
+rand_core = { version = "0.6", features = ["std"] }
+base64 = "0.22"
+chrono = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+walkdir = "2"
+sysinfo = "0.35"
+open = "5"
+regex = "1"
+aes-gcm = "0.10"
+winapi = { version = "0.3", features = ["dpapi", "wincrypt", "winbase"] }
+winreg = "0.52"

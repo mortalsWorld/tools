@@ -31,52 +31,75 @@ export const NetworkTool: React.FC = () => {
       setLoading(true);
     }
     setIpError(null);
-    try {
-      const response = await (window as any).electronAPI.httpRequest({
-        url: 'https://ipinfo.io/json',
-        method: 'GET',
-        timeoutMs: 10000,
-        useSystemProxy: true,
-      });
 
-      if (response.status >= 200 && response.status < 300 && response.body) {
-        try {
-          const data = typeof response.body === 'string'
-            ? JSON.parse(response.body)
-            : response.body;
-          setIpInfo(data);
-          setInitialLoadDone(true);
-          if (isManualRefresh) {
-            message.success('获取成功');
+    // 备用公网IP服务列表
+    const ipServices = [
+      { url: 'https://ipinfo.io/json', parser: (body: any) => body },
+      { url: 'https://api.ipify.org?format=json', parser: (body: any) => ({ ip: body.ip, city: '-', region: '-', country: '-', loc: '-', org: '-', timezone: '-' }) },
+    ];
+
+    let lastError = '';
+    for (const service of ipServices) {
+      try {
+        const response = await (window as any).electronAPI.httpRequest({
+          url: service.url,
+          method: 'GET',
+          timeoutMs: 10000,
+          useSystemProxy: true,
+        });
+
+        if (response.status >= 200 && response.status < 300 && response.body) {
+          try {
+            const rawData = typeof response.body === 'string'
+              ? JSON.parse(response.body)
+              : response.body;
+            const data = service.parser(rawData);
+            setIpInfo(data);
+            setInitialLoadDone(true);
+            if (isManualRefresh) {
+              message.success('获取成功');
+            }
+            setLoading(false);
+            return;
+          } catch (parseError) {
+            console.error('解析响应失败:', parseError);
+            lastError = '解析响应失败';
           }
-        } catch (parseError) {
-          console.error('解析响应失败:', parseError);
-          const errMsg = '解析响应失败';
-          setIpError(errMsg);
-          if (isManualRefresh) {
-            message.error(errMsg);
-          }
+        } else {
+          lastError = `获取失败，状态码: ${response.status}`;
         }
-      } else {
-        const errMsg = `获取失败，状态码: ${response.status}`;
-        setIpError(errMsg);
-        if (isManualRefresh) {
-          message.error(errMsg);
-        }
+      } catch (error) {
+        console.error(`Failed to fetch IP info from ${service.url}:`, error);
+        lastError = error instanceof Error ? error.message : String(error);
       }
-    } catch (error) {
-      console.error('Failed to fetch IP info:', error);
-      const errMsg = error instanceof Error ? error.message : String(error);
-      setIpError(errMsg);
-      if (isManualRefresh) {
-        message.error(`网络请求失败: ${errMsg}`);
-      }
-    } finally {
-      setLoading(false);
     }
+
+    // 所有服务都失败
+    setIpError(lastError || '获取公网IP失败');
+    if (isManualRefresh) {
+      message.error(`网络请求失败: ${lastError}`);
+    }
+    setLoading(false);
   };
 
   const fetchLocalNetworkInfo = async () => {
+    try {
+      // 优先使用 Tauri 后端命令获取本地网络信息
+      if ((window as any).electronAPI?.getLocalNetworkInfo) {
+        const info = await (window as any).electronAPI.getLocalNetworkInfo();
+        if (info) {
+          setLocalNetworkInfo({
+            ipv4: info.ipv4 || [],
+            ipv6: info.ipv6 || [],
+          });
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('后端获取本地网络信息失败，回退到 WebRTC:', error);
+    }
+
+    // 回退到 WebRTC 方法
     const localIPs: LocalNetworkInfo = { ipv4: [], ipv6: [] };
     
     try {

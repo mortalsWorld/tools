@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Input, Button, Space, List, message, Alert } from 'antd';
+import { Card, Input, Button, Space, List, message } from 'antd';
 import { FolderOpenOutlined, SearchOutlined, FileOutlined, CopyOutlined } from '@ant-design/icons';
 
 export const FileSearchTool: React.FC = () => {
@@ -57,12 +57,6 @@ export const FileSearchTool: React.FC = () => {
   return (
     <Card title="文件搜索">
       <Space direction="vertical" style={{ width: '100%' }} size="large">
-        <Alert
-          message="注意"
-          description="此功能需要在 Electron 环境中运行，开发服务器中可能无法使用。"
-          type="info"
-          showIcon
-        />
         <Space style={{ width: '100%' }}>
           <Input
             value={directory}

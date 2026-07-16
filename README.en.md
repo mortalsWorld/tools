@@ -1,11 +1,11 @@
 # Toolbox
 
-A modern general-purpose tool collection desktop application, built with Electron + React + TypeScript.
+A modern general-purpose tool collection desktop application, built with Tauri 2.x + React + TypeScript. Compared to the Electron version, it has smaller size and lower memory usage.
 
-![License](https://img.shields.io/badge/license-MIT--NC-yellow.svg)
-![Electron](https://img.shields.io/badge/Electron-42.4.0-47848F?style=flat-square&logo=electron)
-![React](https://img.shields.io/badge/React-19.2.7-61DAFB?style=flat-square&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?style=flat-square&logo=typescript)
+![License](https://img.shields.io/badge/license-CC%20BY--NC%204.0-yellow.svg)
+![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8D8?style=flat-square&logo=tauri)
+![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript)
 
 ## Features
 
@@ -31,12 +31,13 @@ A modern general-purpose tool collection desktop application, built with Electro
 - **Web Opener** - Quick access to frequently visited websites, supports group management and drag-to-sort
 
 ### Network
-- **Network Info** - View local network IP information
+- **Network Info** - View local network IP information and public IP
+- **HTTP Test** - HTTP request testing tool
 - **IP Subnet Calculator** - IP subnet mask range conversion, supports CIDR and range formats
 - **IP Lookup** - Batch IP lookup tool, supports multi-format subnet matching, IPv4/IPv6
 
 ### System
-- **Process Viewer** - View system processes, CPU, memory, GPU information
+- **Process Viewer** - View system processes, CPU, memory information
 
 ### Security
 - **Password Manager** - Password generation and storage management, supports group management, drag-to-sort, and batch operations
@@ -46,12 +47,19 @@ A modern general-purpose tool collection desktop application, built with Electro
 
 ## Tech Stack
 
-- **Frontend Framework**: React 19.2.7
-- **Type System**: TypeScript 5.9.3
-- **Desktop Framework**: Electron 42.4.0
-- **UI Component Library**: Ant Design 6.4.4
-- **Drag & Drop**: @dnd-kit 6.3.1
-- **Build Tools**: Vite 8.0.16 + electron-builder 26.0.0
+- **Frontend Framework**: React 19
+- **Type System**: TypeScript 5.6
+- **Desktop Framework**: Tauri 2.x (Rust-based)
+- **UI Component Library**: Ant Design 6.4
+- **Drag & Drop**: @dnd-kit 6.3
+- **Build Tool**: Vite 8
+
+## Security Features
+
+- ✅ **Password Encryption** - XOR encryption with local key storage
+- ✅ **Global Shortcuts** - Quick show/hide window with keyboard shortcuts
+- ✅ **Window Behavior Control** - Support minimize to tray on close
+- ✅ **Auto Config Migration** - Automatically detect and migrate old Electron config on startup
 
 ## Project Structure
 
@@ -60,37 +68,29 @@ src/
 ├── tools/                    # Tool components directory
 │   ├── common/              # Common components and hooks
 │   │   ├── components/      # Common UI components
-│   │   │   ├── BatchMoveModal.tsx      # Batch move modal
-│   │   │   ├── GroupDropZone.tsx      # Group drag zone
-│   │   │   ├── GroupItem.tsx          # Group item component
-│   │   │   ├── GroupPanel.tsx         # Group panel
-│   │   │   └── SortableItemBase.tsx   # Sortable item base component
-│   │   ├── hooks/          # Common hooks
-│   │   │   ├── useBatchSelection.ts   # Batch selection management
-│   │   │   ├── useConfigPersistence.ts # Config persistence
-│   │   │   ├── useDragAndDrop.ts      # Drag and drop
-│   │   │   └── useGroupManagement.ts  # Group management
-│   │   └── utils/          # Utility functions
-│   ├── datetime/           # Date/time tools
-│   ├── encoding/           # Encoding tools
-│   ├── examples/          # Example tools
-│   ├── filesearch/        # File search tools
-│   ├── filelauncher/      # File launcher tools
-│   ├── network/           # Network tools
-│   ├── security/          # Security tools
-│   ├── settings/          # Settings tools
-│   ├── system/            # System tools
-│   ├── text/              # Text processing tools
-│   └── webopener/         # Web opener tools
-├── components/             # Global components
-├── context/                # React Context
-├── electron/               # Electron main process
-└── types/                  # Type definitions
+│   │   ├── hooks/           # Common hooks
+│   │   └── utils/           # Utility functions
+│   ├── datetime/            # Date/time tools
+│   ├── encoding/            # Encoding tools
+│   ├── examples/            # Example tools
+│   ├── filesearch/          # File search tools
+│   ├── filelauncher/        # File launcher tools
+│   ├── network/             # Network tools
+│   ├── security/            # Security tools
+│   ├── settings/            # Settings tools
+│   ├── system/              # System tools
+│   └── text/                # Text processing tools
+├── components/              # Global components
+├── context/                 # React Context
+└── lib/                     # Utility libraries
 
-electron/
-├── main.ts                 # Electron main process entry
-├── preload.ts              # Preload script
-└── logger.ts              # Logger utility
+src-tauri/
+├── src/
+│   ├── main.rs              # Tauri main process entry
+│   ├── lib.rs               # Library entry
+│   └── commands.rs          # Rust backend commands
+├── Cargo.toml               # Rust dependencies
+└── tauri.conf.json          # Tauri configuration
 ```
 
 ## Installation & Usage
@@ -98,6 +98,7 @@ electron/
 ### Requirements
 
 - Node.js >= 18.0.0
+- Rust >= 1.77.0
 - npm >= 9.0.0
 
 ### Install Dependencies
@@ -109,36 +110,41 @@ npm install
 ### Development Mode
 
 ```bash
-npm run dev
+npm run dev:tauri
 ```
 
 ### Build Application
 
 ```bash
-npm run build
+npm run build:tauri
 ```
 
-After building, the packages are located in the `release/` directory:
-- `DevTools Setup 1.5.0.exe` - NSIS installer
-- `DevTools 1.5.0.exe` - Portable version
+After building, packages are located in `src-tauri/target/release/bundle/`:
+- `nsis/工具箱_1.6.0_x64-setup.exe` - NSIS installer
+- Portable version can run `src-tauri/target/release/app.exe` directly
 
 ## Config Persistence
 
-Application configs are stored in the **installation directory** under the `config/` subdirectory:
+Application configs are stored in the **runtime directory** under the `config/` subdirectory:
 
 ```
-installation-directory/
-├── DevTools.exe           # Application
-├── config/                # Config directory
-│   ├── app-config.json    # App settings (theme, shortcuts, backup, window behavior, etc.)
-│   ├── file-launcher.json # File launcher config
-│   ├── web-opener.json    # Web opener config
-│   ├── passwords.json     # Password manager config (encrypted)
-│   └── backups/           # Config backup directory
-└── logs/                  # Log files directory
+runtime-directory/
+├── app.exe                  # Application
+├── app_lib.dll              # Dynamic library
+├── config/                  # Config directory
+│   ├── app-config.json      # App settings
+│   ├── file-launcher.json   # File launcher config
+│   ├── web-opener.json      # Web opener config
+│   ├── passwords.json       # Password manager config (encrypted)
+│   └── backups/             # Config backup directory
+└── logs/                    # Log files directory
 ```
 
-**Note**: Config files move with the installation directory. Uninstalling the app will not delete configs (manual deletion of the installation directory is required).
+### Auto Config Migration
+
+On first startup, if old config is detected, it will be automatically migrated from:
+- `%APPDATA%/toolbox/config/` (default installation)
+- `config/` in runtime directory (portable version)
 
 ### Config Files
 
@@ -146,7 +152,6 @@ installation-directory/
 - `file-launcher.json` - File launcher config (supports group management, drag-to-sort)
 - `web-opener.json` - Web opener config (supports group management, drag-to-sort)
 - `passwords.json` - Password manager config (**encrypted storage**, supports group management)
-- `backups/` - Config backup directory
 
 ## Development Guide
 
@@ -182,24 +187,6 @@ toolRegistry.registerTool({
 });
 ```
 
-### Adding a New Category
-
-```tsx
-toolRegistry.registerCategory({
-  id: 'my-category',
-  name: 'My Category',
-  icon: <MyIcon />
-});
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Create a Pull Request
-
 ## License
 
 This project is open source under the **CC BY-NC 4.0 License (Attribution-NonCommercial)**. See [LICENSE](LICENSE) for details.
@@ -214,7 +201,7 @@ For commercial licensing, please contact the author for written permission.
 
 ## Acknowledgements
 
-- [Electron](https://electronjs.org/) - Build cross-platform desktop apps
+- [Tauri](https://tauri.app/) - Build smaller, faster, and more secure desktop apps
 - [React](https://reactjs.org/) - The library for web and native user interfaces
 - [Ant Design](https://ant.design/) - An enterprise-class UI design language
 - [@dnd-kit](https://dndkit.com/) - A lightweight, modular drag & drop toolkit

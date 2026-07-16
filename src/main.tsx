@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import './lib/tauriAPI'; // 初始化 Tauri API 适配层
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 

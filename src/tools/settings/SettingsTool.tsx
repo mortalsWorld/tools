@@ -67,6 +67,7 @@ export const SettingsTool: React.FC = () => {
   const [showMigrateModal, setShowMigrateModal] = useState(false)
   const [migrateLoading, setMigrateLoading] = useState(false)
   const [backupList, setBackupList] = useState<BackupItem[]>([])
+  
   const [backupDirValue, setBackupDirValue] = useState('')
   const [loadingBackup, setLoadingBackup] = useState(false)
   const [shortcutCollapsed, setShortcutCollapsed] = useState(true)
@@ -205,7 +206,7 @@ export const SettingsTool: React.FC = () => {
   const handleSelectBackupDirectory = async () => {
     try {
       if (!(window as any).electronAPI) {
-        message.warning('请在 Electron 环境中运行此功能')
+        message.warning('请在 Tauri 桌面环境中运行此功能')
         return
       }
       
@@ -226,8 +227,8 @@ export const SettingsTool: React.FC = () => {
     console.log('[SettingsTool] handleCreateBackup: 用户点击手动备份按钮')
     try {
       if (!(window as any).electronAPI) {
-        console.log('[SettingsTool] handleCreateBackup: 不在 Electron 环境中')
-        message.warning('请在 Electron 环境中运行此功能')
+        console.log('[SettingsTool] handleCreateBackup: 不在 Tauri 桌面环境中')
+        message.warning('请在 Tauri 桌面环境中运行此功能')
         return
       }
       
@@ -257,7 +258,7 @@ export const SettingsTool: React.FC = () => {
   const handleDeleteBackup = async (backupId: string) => {
     try {
       if (!(window as any).electronAPI) {
-        message.warning('请在 Electron 环境中运行此功能')
+        message.warning('请在 Tauri 桌面环境中运行此功能')
         return
       }
       
@@ -280,7 +281,7 @@ export const SettingsTool: React.FC = () => {
   const handleRestoreBackup = async (backupId: string) => {
     try {
       if (!(window as any).electronAPI) {
-        message.warning('请在 Electron 环境中运行此功能')
+        message.warning('请在 Tauri 桌面环境中运行此功能')
         return
       }
       
@@ -303,7 +304,7 @@ export const SettingsTool: React.FC = () => {
   const handleImportBackup = async () => {
     try {
       if (!(window as any).electronAPI) {
-        message.warning('请在 Electron 环境中运行此功能')
+        message.warning('请在 Tauri 桌面环境中运行此功能')
         return
       }
       
@@ -331,8 +332,8 @@ export const SettingsTool: React.FC = () => {
     console.log('[SettingsTool] handleSelectDirectory: 用户点击选择目录按钮')
     try {
       if (!(window as any).electronAPI) {
-        console.log('[SettingsTool] handleSelectDirectory: 不在 Electron 环境中')
-        message.warning('请在 Electron 环境中运行此功能')
+        console.log('[SettingsTool] handleSelectDirectory: 不在 Tauri 桌面环境中')
+        message.warning('请在 Tauri 桌面环境中运行此功能')
         return
       }
       
@@ -447,7 +448,7 @@ export const SettingsTool: React.FC = () => {
   const saveConfig = async (values: any, existingConfig?: any) => {
     console.log('[SettingsTool] saveConfig: 开始保存配置')
     if (!(window as any).electronAPI) {
-      message.warning('请在 Electron 环境中运行此功能')
+      message.warning('请在 Tauri 桌面环境中运行此功能')
       return
     }
     
@@ -484,6 +485,8 @@ export const SettingsTool: React.FC = () => {
     if (success) {
       message.success('设置已保存')
       setOriginalConfigDir(config.configDir)
+      // 重新注册全局快捷键
+      await (window.electronAPI as any).registerAllShortcuts?.().catch(() => {})
     } else {
       message.error('保存失败')
     }
@@ -492,7 +495,7 @@ export const SettingsTool: React.FC = () => {
   const handleMigrate = async (existingConfig?: any) => {
     console.log('[SettingsTool] handleMigrate: 用户确认迁移配置目录')
     if (!(window as any).electronAPI) {
-      message.warning('请在 Electron 环境中运行此功能')
+      message.warning('请在 Tauri 桌面环境中运行此功能')
       return
     }
     
@@ -803,13 +806,6 @@ export const SettingsTool: React.FC = () => {
           </Space>
         </div>
 
-      <Alert
-        title="设置说明"
-        description="在此页面可以配置应用程序的基本设置，包括配置文件保存目录、窗口快捷键和工具快捷键。使用 Ctrl+Shift+H 可以快速隐藏或显示应用窗口。"
-        type="info"
-        showIcon
-      />
-
       <Card title="基本设置" size="small">
         <Form form={form} layout="vertical">
           <Form.Item
@@ -868,6 +864,8 @@ export const SettingsTool: React.FC = () => {
                   if (success) {
                     message.success(checked ? '已开启：关闭按钮将最小化到托盘' : '已关闭：关闭按钮将退出程序')
                     setOriginalConfigDir(newConfig.configDir || '')
+                    // 重新注册全局快捷键以更新窗口行为状态
+                    await (window.electronAPI as any).registerAllShortcuts?.().catch(() => {})
                   } else {
                     message.error('保存失败')
                   }

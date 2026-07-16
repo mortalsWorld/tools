@@ -1,11 +1,11 @@
 # 工具箱 (Toolbox)
 
-一个现代化的通用工具集合桌面应用程序，基于 Electron + React + TypeScript 构建。
+一个现代化的通用工具集合桌面应用程序，基于 Tauri 2.x + React + TypeScript 构建，相比 Electron 版本具有更小的体积和更低的内存占用。
 
-![License](https://img.shields.io/badge/license-MIT--NC-yellow.svg)
-![Electron](https://img.shields.io/badge/Electron-42.4.0-47848F?style=flat-square&logo=electron)
-![React](https://img.shields.io/badge/React-19.2.7-61DAFB?style=flat-square&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?style=flat-square&logo=typescript)
+![License](https://img.shields.io/badge/license-CC%20BY--NC%204.0-yellow.svg)
+![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8D8?style=flat-square&logo=tauri)
+![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript)
 
 ## 功能特性
 
@@ -31,12 +31,13 @@
 - **网页快速打开** - 快速访问常用网站，支持分组管理、拖拽排序
 
 ### 网络工具
-- **网络信息** - 查看本地网络 IP 信息
+- **网络信息** - 查看本地网络 IP 信息、公网 IP
+- **HTTP 测试** - HTTP 请求测试工具
 - **IP 子网计算** - IP 子网掩码范围转换，支持 CIDR、范围格式
 - **IP 查找** - 批量 IP 查找工具，支持多格式子网匹配、IPv4/IPv6
 
 ### 系统工具
-- **进程查看** - 查看系统进程、CPU、内存、GPU 信息
+- **进程查看** - 查看系统进程、CPU、内存信息
 
 ### 安全工具
 - **密码管理** - 密码生成与存储管理，支持分组管理、拖拽排序、批量操作
@@ -46,21 +47,19 @@
 
 ## 技术栈
 
-- **前端框架**: React 19.2.7
-- **类型系统**: TypeScript 5.9.3
-- **桌面框架**: Electron 42.4.0
-- **UI 组件库**: Ant Design 6.4.4
-- **拖拽排序**: @dnd-kit 6.3.1
-- **构建工具**: Vite 8.0.16 + electron-builder 26.0.0
+- **前端框架**: React 19
+- **类型系统**: TypeScript 5.6
+- **桌面框架**: Tauri 2.x（基于 Rust）
+- **UI 组件库**: Ant Design 6.4
+- **拖拽排序**: @dnd-kit 6.3
+- **构建工具**: Vite 8
 
 ## 安全特性
 
-- ✅ **密码加密存储** - 使用 Electron `safeStorage`（系统级加密：Windows DPAPI / macOS Keychain）
-- ✅ **命令注入防护** - 使用 `execFile` 参数化调用，禁止字符串拼接
-- ✅ **内容安全策略 (CSP)** - 严格的 CSP 配置，限制资源加载
-- ✅ **URL 协议白名单** - 仅允许 http/https/ftp/mailto 等安全协议
-- ✅ **生产环境 DevTools 关闭** - 仅开发模式启用
-- ✅ **sandbox 启用** - BrowserWindow sandbox 安全隔离
+- ✅ **密码加密存储** - 使用 XOR 加密，密钥存储在本地
+- ✅ **全局快捷键** - 支持快捷键快速显示/隐藏窗口
+- ✅ **窗口行为控制** - 支持关闭按钮最小化到托盘
+- ✅ **自动配置迁移** - 启动时自动检测并迁移旧版 Electron 配置
 
 ## 项目结构
 
@@ -69,40 +68,29 @@ src/
 ├── tools/                    # 工具组件目录
 │   ├── common/              # 公共组件和 hooks
 │   │   ├── components/      # 公共 UI 组件
-│   │   │   ├── BatchMoveModal.tsx      # 批量移动弹窗
-│   │   │   ├── GroupDropZone.tsx      # 分组拖拽区域
-│   │   │   ├── GroupItem.tsx          # 分组项组件
-│   │   │   ├── GroupPanel.tsx         # 分组面板
-│   │   │   └── SortableItemBase.tsx   # 可排序项基础组件
-│   │   ├── hooks/          # 公共 Hooks
-│   │   │   ├── useBatchSelection.ts   # 批量选择管理
-│   │   │   ├── useConfigPersistence.ts # 配置持久化
-│   │   │   ├── useDragAndDrop.ts      # 拖拽排序
-│   │   │   └── useGroupManagement.ts  # 分组管理
-│   │   └── utils/          # 工具函数
-│   ├── datetime/           # 时间日期工具
-│   ├── encoding/           # 编码转换工具
-│   ├── examples/          # 示例工具
-│   ├── filesearch/        # 文件搜索工具
-│   ├── filelauncher/      # 文件启动工具
-│   ├── network/           # 网络工具
-│   ├── security/          # 安全工具
-│   ├── settings/          # 设置工具
-│   ├── system/            # 系统工具
-│   ├── text/              # 文本处理工具
-│   └── webopener/         # 网页打开工具
-├── components/             # 全局组件
-├── context/                # React Context
-├── electron/               # Electron 主进程
-└── types/                  # 类型定义
+│   │   ├── hooks/           # 公共 Hooks
+│   │   └── utils/           # 工具函数
+│   ├── datetime/            # 时间日期工具
+│   ├── encoding/            # 编码转换工具
+│   ├── examples/            # 示例工具
+│   ├── filesearch/          # 文件搜索工具
+│   ├── filelauncher/        # 文件启动工具
+│   ├── network/             # 网络工具
+│   ├── security/            # 安全工具
+│   ├── settings/            # 设置工具
+│   ├── system/              # 系统工具
+│   └── text/                # 文本处理工具
+├── components/              # 全局组件
+├── context/                 # React Context
+└── lib/                     # 工具库
 
-electron/
-├── main.ts                 # Electron 主进程入口
-├── preload.ts              # 预加载脚本
-└── logger.ts              # 日志工具
-
-scripts/
-└── afterPack.js           # 打包后优化脚本（清理未使用的 Chromium 语言包）
+src-tauri/
+├── src/
+│   ├── main.rs              # Tauri 主进程入口
+│   ├── lib.rs               # 库入口
+│   └── commands.rs          # Rust 后端命令
+├── Cargo.toml               # Rust 依赖配置
+└── tauri.conf.json          # Tauri 配置
 ```
 
 ## 安装与运行
@@ -110,6 +98,7 @@ scripts/
 ### 环境要求
 
 - Node.js >= 18.0.0
+- Rust >= 1.77.0
 - npm >= 9.0.0
 
 ### 安装依赖
@@ -121,71 +110,43 @@ npm install
 ### 开发模式
 
 ```bash
-npm run dev
+npm run dev:tauri
 ```
 
 ### 构建应用
 
 ```bash
-npm run build
+npm run build:tauri
 ```
 
-构建完成后，安装包位于 `release/` 目录下：
-- `DevTools Setup 1.5.0.exe` - NSIS 安装包（约 100 MB）
-- `DevTools 1.5.0.exe` - 便携版（约 100 MB）
-
-### 安装说明
-
-应用安装时支持自定义安装目录：
-- **非一键安装模式** - 用户可以选择安装位置
-- **每用户安装** - 安装到用户目录，避免权限问题
-- **创建桌面快捷方式** - 自动创建桌面快捷方式
-- **创建开始菜单** - 自动创建开始菜单项
-
-### 打包体积优化
-
-应用通过以下方式优化打包体积：
-- **删除未使用的 Chromium 语言包** - 仅保留中英日韩语言包，节省约 45 MB
-- **maximum 压缩** - 使用最高压缩率
-- **asar 打包** - 应用代码和资源打包为 asar 格式
+构建完成后，安装包位于 `src-tauri/target/release/bundle/` 目录下：
+- `nsis/工具箱_1.6.0_x64-setup.exe` - NSIS 安装包
+- 便携版可直接运行 `src-tauri/target/release/app.exe`
 
 ## 配置持久化
 
 ### 配置存储位置
 
-应用配置存储在**安装目录**下的 `config/` 子目录：
+应用配置存储在**运行目录**下的 `config/` 子目录：
 
 ```
-安装目录/
-├── DevTools.exe           # 应用程序
-├── config/                # 配置文件目录
-│   ├── app-config.json    # 应用配置（主题、快捷键、备份配置、窗口行为等）
-│   ├── file-launcher.json # 文件快速启动配置
-│   ├── web-opener.json    # 网页快速打开配置
-│   ├── passwords.json     # 密码管理配置（已加密）
-│   └── backups/           # 配置备份目录
-└── logs/                  # 日志文件目录
+运行目录/
+├── app.exe                  # 应用程序
+├── app_lib.dll              # 动态库
+├── config/                  # 配置文件目录
+│   ├── app-config.json      # 应用配置
+│   ├── file-launcher.json   # 文件快速启动配置
+│   ├── web-opener.json      # 网页快速打开配置
+│   ├── passwords.json       # 密码管理配置（已加密）
+│   └── backups/             # 配置备份目录
+└── logs/                    # 日志文件目录
 ```
 
-**重要**：配置文件随安装目录移动，卸载应用不会删除配置（需手动删除安装目录）。
+### 旧配置自动迁移
 
-### 旧配置迁移
-
-首次启动时，如果检测到旧版本配置（位于用户数据目录），会自动迁移到新位置：
-- **Windows**: `%APPDATA%/toolbox/config/` → `安装目录/config/`
-- **macOS**: `~/Library/Application Support/toolbox/config/` → `安装目录/config/`
-
-### 备份与恢复
-
-应用支持自动备份配置：
-- **自动备份** - 每次保存配置前自动创建备份
-- **定时备份** - 可设置定时自动备份
-- **备份保留数量** - 默认保留 5 个备份
-- **手动备份** - 支持手动创建完整备份
-- **恢复备份** - 支持从备份列表恢复配置
-- **导入外部备份** - 支持导入外部备份目录
-
-备份存储在 `config/backups/` 目录下。
+首次启动时，如果检测到旧版本配置，会自动迁移：
+- `%APPDATA%/toolbox/config/` （默认安装位置）
+- 运行目录下的 `config/` （便携版）
 
 ### 配置文件说明
 
@@ -193,7 +154,6 @@ npm run build
 - `file-launcher.json` - 文件快速启动配置（支持分组管理、拖拽排序）
 - `web-opener.json` - 网页快速打开配置（支持分组管理、拖拽排序）
 - `passwords.json` - 密码管理配置（**已加密存储**，支持分组管理）
-- `backups/` - 配置备份目录
 
 ## 开发指南
 
@@ -229,24 +189,6 @@ toolRegistry.registerTool({
 });
 ```
 
-### 添加新分类
-
-```tsx
-toolRegistry.registerCategory({
-  id: 'my-category',
-  name: '我的分类',
-  icon: <MyIcon />
-});
-```
-
-## 参与贡献
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 创建 Pull Request
-
 ## 许可证
 
 本项目基于 **CC BY-NC 4.0 许可证（署名-非商业性使用）** 开源，详见 [LICENSE](LICENSE) 文件。
@@ -261,7 +203,7 @@ toolRegistry.registerCategory({
 
 ## 致谢
 
-- [Electron](https://electronjs.org/) - 使用 Electron 构建跨平台桌面应用
+- [Tauri](https://tauri.app/) - 构建更小、更快、更安全的桌面应用
 - [React](https://reactjs.org/) - 用户界面库
 - [Ant Design](https://ant.design/) - 企业级 UI 设计语言
 - [@dnd-kit](https://dndkit.com/) - 轻量级拖拽排序库

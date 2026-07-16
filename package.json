@@ -1,12 +1,13 @@
 {
   "name": "toolbox",
-  "version": "1.5.0",
-  "description": "工具箱 - 通用工具集合",
+  "version": "1.6.0",
+  "description": "工具箱 - 基于 Tauri 的轻量级通用工具集合，支持密码管理、文件启动、网络工具、文本处理等功能",
   "license": "SEE LICENSE IN LICENSE",
-  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && electron-builder",
+    "dev:tauri": "tauri dev",
+    "build": "tsc && vite build",
+    "build:tauri": "tsc && vite build && tauri build",
     "lint": "echo 'ESLint skipped due to version compatibility'",
     "preview": "vite preview"
   },
@@ -15,6 +16,7 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@tauri-apps/api": "^2.11.0",
     "@types/highlight.js": "^9.12.4",
     "@types/markdown-it": "^14.1.2",
     "antd": "^6.4.4",
@@ -26,13 +28,12 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
+    "@tauri-apps/cli": "^2.11.4",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "@vitejs/plugin-react": "^5.2.0",
-    "electron": "^42.4.0",
-    "electron-builder": "^26.0.0",
     "esbuild": "^0.28.1",
     "eslint": "^9.0.0",
     "eslint-plugin-react-hooks": "^5.2.0",
@@ -40,8 +41,6 @@
     "sharp": "^0.35.1",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.0.0",
-    "vite": "^8.0.16",
-    "vite-plugin-electron": "^1.0.4",
-    "vite-plugin-electron-renderer": "^0.14.6"
+    "vite": "^8.0.16"
   }
 }

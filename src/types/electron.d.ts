@@ -75,6 +75,12 @@ export interface IElectronAPI {
   selectIcon: () => Promise<{ path: string; base64: string } | null>;
   getFileIcon: (filePath: string) => Promise<{ base64: string }>;
   resolveShortcut: (lnkPath: string) => Promise<{ success: boolean; targetPath: string; isShortcut?: boolean; error?: string }>;
+  registerGlobalShortcut: (shortcut: string, handler: string) => Promise<boolean>;
+  unregisterGlobalShortcut: (handler: string) => Promise<boolean>;
+  registerAllShortcuts: () => Promise<boolean>;
+  showWindow: () => Promise<boolean>;
+  hideWindow: () => Promise<boolean>;
+  toggleWindow: () => Promise<boolean>;
   onShortcutTriggered: (callback: (toolId: string) => void) => () => void;
   onConfigChanged: (callback: () => void) => () => void;
   onNavigateTo: (callback: (toolId: string) => void) => () => void;
