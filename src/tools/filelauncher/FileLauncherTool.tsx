@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   Card,
   Button,
@@ -261,6 +261,35 @@ const FileLauncherTool: React.FC = () => {
       return undefined;
     }
   }, []);
+
+  // ========== 自动获取图标 ==========
+  useEffect(() => {
+    if (isAddModalVisible && newItem.path.trim() && !newItem.iconData) {
+      const timer = setTimeout(async () => {
+        console.log('[AutoIcon] Add modal: fetching icon for', newItem.path);
+        const iconData = await fetchFileIcon(newItem.path);
+        console.log('[AutoIcon] Add modal: fetched icon length=', iconData?.length);
+        if (iconData) {
+          setNewItem(prev => ({ ...prev, iconData }));
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isAddModalVisible, newItem.path, fetchFileIcon]);
+
+  useEffect(() => {
+    if (isEditModalVisible && editingItem?.path.trim() && !editingItem.iconData) {
+      const timer = setTimeout(async () => {
+        console.log('[AutoIcon] Edit modal: fetching icon for', editingItem.path);
+        const iconData = await fetchFileIcon(editingItem.path);
+        console.log('[AutoIcon] Edit modal: fetched icon length=', iconData?.length);
+        if (iconData) {
+          setEditingItem(prev => prev ? ({ ...prev, iconData }) : null);
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isEditModalVisible, editingItem?.path, fetchFileIcon]);
 
   // ========== 特有逻辑：解析快捷方式 ==========
   const resolveShortcut = useCallback(async (lnkPath: string): Promise<string> => {
@@ -554,8 +583,10 @@ const FileLauncherTool: React.FC = () => {
   // ========== 处理上传图标 ==========
   const handleUploadIcon = useCallback(async (forAdd: boolean) => {
     try {
+      console.log('[UploadIcon] Opening file picker...');
       const iconData = await window.electronAPI?.selectIcon();
-      if (iconData) {
+      console.log('[UploadIcon] Result:', iconData ? `path=${iconData.path}, base64_len=${iconData.base64?.length}, prefix=${iconData.base64?.substring(0, 50)}` : 'null');
+      if (iconData && iconData.base64) {
         if (forAdd) {
           setNewItem(prev => ({ ...prev, iconData: iconData.base64 }));
         } else if (editingItem) {

@@ -6,6 +6,7 @@ export interface ProcessInfo {
   memory: string;
   memoryBytes: number;
   cpuUsage: number;
+  ports: number[];
 }
 
 export interface SystemInfo {
@@ -83,6 +84,8 @@ export interface ITauriAPI {
   showWindow: () => Promise<boolean>;
   hideWindow: () => Promise<boolean>;
   toggleWindow: () => Promise<boolean>;
+  minimizeWindow: () => Promise<boolean>;
+  quitApp: () => Promise<boolean>;
   onShortcutTriggered: (callback: (toolId: string) => void) => () => void;
   onConfigChanged: (callback: () => void) => () => void;
   onNavigateTo: (callback: (toolId: string) => void) => () => void;

@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { Card, Input, Select, Button, Table, message, Spin, Tabs, Tag, Tooltip, Empty, Switch, Collapse, Space } from 'antd';
-import { SendOutlined, ClockCircleOutlined, DeleteOutlined, PlusOutlined, CopyOutlined, LockOutlined, GlobalOutlined } from '@ant-design/icons';
+import { SendOutlined, ClockCircleOutlined, DeleteOutlined, PlusOutlined, CopyOutlined, LockOutlined, GlobalOutlined, UploadOutlined, FileOutlined } from '@ant-design/icons';
 
 const { Option } = Select;
 const { TabPane } = Tabs;
@@ -10,6 +10,19 @@ interface HeaderItem {
   key: string;
   name: string;
   value: string;
+}
+
+interface QueryParamItem {
+  key: string;
+  name: string;
+  value: string;
+}
+
+interface UploadFileItem {
+  key: string;
+  fieldName: string;
+  filePath: string;
+  fileName: string;
 }
 
 interface RequestHistory {
@@ -29,7 +42,7 @@ interface ResponseData {
   duration: number;
 }
 
-type BodyType = 'json' | 'text' | 'form';
+type BodyType = 'json' | 'text' | 'form' | 'multipart';
 type AuthType = 'none' | 'basic' | 'bearer' | 'apikey';
 type ApiKeyLocation = 'header' | 'query';
 
@@ -41,8 +54,10 @@ export const HttpTestTool: React.FC = () => {
   const [headers, setHeaders] = useState<HeaderItem[]>([
     { key: '1', name: 'Content-Type', value: 'application/json' },
   ]);
+  const [queryParams, setQueryParams] = useState<QueryParamItem[]>([]);
   const [bodyType, setBodyType] = useState<BodyType>('json');
   const [body, setBody] = useState('');
+  const [uploadFiles, setUploadFiles] = useState<UploadFileItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<ResponseData | null>(null);
   const [history, setHistory] = useState<RequestHistory[]>([]);
@@ -67,6 +82,7 @@ export const HttpTestTool: React.FC = () => {
 
   const generateKey = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
+  // ========== Headers ==========
   const addHeader = () => {
     setHeaders([...headers, { key: generateKey(), name: '', value: '' }]);
   };
@@ -79,6 +95,45 @@ export const HttpTestTool: React.FC = () => {
     setHeaders(headers.map(h => h.key === key ? { ...h, [field]: value } : h));
   };
 
+  // ========== Query Params ==========
+  const addQueryParam = () => {
+    setQueryParams([...queryParams, { key: generateKey(), name: '', value: '' }]);
+  };
+
+  const removeQueryParam = (key: string) => {
+    setQueryParams(queryParams.filter(p => p.key !== key));
+  };
+
+  const updateQueryParam = (key: string, field: 'name' | 'value', value: string) => {
+    setQueryParams(queryParams.map(p => p.key === key ? { ...p, [field]: value } : p));
+  };
+
+  // ========== Upload Files ==========
+  const addUploadFile = async () => {
+    try {
+      const filePath = await (window as any).electronAPI?.selectFile?.();
+      if (filePath) {
+        const fileName = filePath.split(/[\\/]/).pop() || 'file';
+        setUploadFiles(prev => [...prev, {
+          key: generateKey(),
+          fieldName: 'file',
+          filePath,
+          fileName,
+        }]);
+      }
+    } catch (e) {
+      console.error('选择文件失败:', e);
+    }
+  };
+
+  const removeUploadFile = (key: string) => {
+    setUploadFiles(uploadFiles.filter(f => f.key !== key));
+  };
+
+  const updateFileFieldName = (key: string, fieldName: string) => {
+    setUploadFiles(uploadFiles.map(f => f.key === key ? { ...f, fieldName } : f));
+  };
+
   const formatHeaders = () => {
     const result: Record<string, string> = {};
     headers.forEach(h => {
@@ -87,6 +142,12 @@ export const HttpTestTool: React.FC = () => {
       }
     });
     return result;
+  };
+
+  const formatQueryParams = (): [string, string][] => {
+    return queryParams
+      .filter(p => p.name.trim())
+      .map(p => [p.name.trim(), p.value.trim()] as [string, string]);
   };
 
   const getAuthHeaders = (): Record<string, string> => {
@@ -124,25 +185,9 @@ export const HttpTestTool: React.FC = () => {
     return params;
   };
 
-  const parseFormBody = () => {
-    try {
-      const pairs = body.split('\n');
-      const formData = new URLSearchParams();
-      pairs.forEach(pair => {
-        const [key, ...valueParts] = pair.split('=');
-        if (key) {
-          formData.append(key.trim(), valueParts.join('=').trim());
-        }
-      });
-      return formData;
-    } catch {
-      return body;
-    }
-  };
-
   const getRequestBody = () => {
-    if (bodyType === 'form') {
-      return parseFormBody();
+    if (bodyType === 'form' || bodyType === 'multipart') {
+      return body;
     }
     if (bodyType === 'json') {
       try {
@@ -183,6 +228,21 @@ export const HttpTestTool: React.FC = () => {
         ...getAuthHeaders(),
       };
 
+      // 如果是 multipart，移除 Content-Type（让客户端自动设置 boundary）
+      if (bodyType === 'multipart') {
+        delete requestHeaders['Content-Type'];
+        delete requestHeaders['content-type'];
+      }
+
+      // 构建文件上传列表
+      const files = bodyType === 'multipart' && uploadFiles.length > 0
+        ? uploadFiles.map(f => ({
+            fieldName: f.fieldName || 'file',
+            filePath: f.filePath,
+            fileName: f.fileName,
+          }))
+        : undefined;
+
       // 构建主进程请求配置
       const mainRequestOptions = {
         url: requestUrl,
@@ -190,6 +250,8 @@ export const HttpTestTool: React.FC = () => {
         headers: requestHeaders,
         timeoutMs,
         body: (method !== 'GET' && method !== 'HEAD' && body.trim()) ? getRequestBody() : undefined,
+        queryParams: formatQueryParams(),
+        files,
         proxy: proxyEnabled && proxyUrl ? {
           url: proxyUrl,
           auth: proxyAuthEnabled && proxyUsername ? { username: proxyUsername, password: proxyPassword } : undefined,
@@ -233,7 +295,7 @@ export const HttpTestTool: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [method, url, headers, body, bodyType, timeoutMs, authType, basicUsername, basicPassword, bearerToken, apiKeyName, apiKeyValue, apiKeyLocation, proxyEnabled, proxyUrl, proxyAuthEnabled, proxyUsername, proxyPassword]);
+  }, [method, url, headers, body, bodyType, timeoutMs, authType, basicUsername, basicPassword, bearerToken, apiKeyName, apiKeyValue, apiKeyLocation, proxyEnabled, proxyUrl, proxyAuthEnabled, proxyUsername, proxyPassword, queryParams, uploadFiles]);
 
   const useHistoryItem = (item: RequestHistory) => {
     setMethod(item.method);
@@ -253,6 +315,13 @@ export const HttpTestTool: React.FC = () => {
   };
 
   const isSuccess = response !== null && response.status >= 200 && response.status < 300;
+
+  const bodyTypeLabel = {
+    json: 'JSON',
+    text: '文本',
+    form: '表单',
+    multipart: 'Multipart',
+  };
 
   return (
     <div style={{ padding: '16px', height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -301,7 +370,61 @@ export const HttpTestTool: React.FC = () => {
         </div>
       </Card>
 
-      <Collapse defaultActiveKey={['headers', 'auth', 'proxy']} ghost style={{ marginBottom: '16px' }}>
+      <Collapse defaultActiveKey={['query', 'headers', 'auth', 'proxy']} ghost style={{ marginBottom: '16px' }}>
+        {/* Query 参数 */}
+        <Panel header="Query 参数" key="query">
+          <Table
+            dataSource={queryParams}
+            pagination={false}
+            rowKey="key"
+            size="small"
+            bordered={false}
+            footer={() => (
+              <Button type="dashed" icon={<PlusOutlined />} onClick={addQueryParam}>
+                添加参数
+              </Button>
+            )}
+          >
+            <Table.Column
+              title="名称"
+              dataIndex="name"
+              render={(text, record: any) => (
+                <Input
+                  value={text}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateQueryParam(record.key, 'name', e.target.value)}
+                  placeholder="参数名"
+                  style={{ width: '100%' }}
+                />
+              )}
+            />
+            <Table.Column
+              title="值"
+              dataIndex="value"
+              render={(text, record: any) => (
+                <Input
+                  value={text}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateQueryParam(record.key, 'value', e.target.value)}
+                  placeholder="参数值"
+                  style={{ width: '100%' }}
+                />
+              )}
+            />
+            <Table.Column
+              title="操作"
+              render={(_, record: any) => (
+                <Tooltip title="删除">
+                  <Button
+                    type="text"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={() => removeQueryParam(record.key)}
+                  />
+                </Tooltip>
+              )}
+            />
+          </Table>
+        </Panel>
+
         <Panel header="请求头" key="headers">
           <Table
             dataSource={headers}
@@ -318,7 +441,7 @@ export const HttpTestTool: React.FC = () => {
             <Table.Column
               title="名称"
               dataIndex="name"
-              render={(text, record) => (
+              render={(text, record: any) => (
                 <Input
                   value={text}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateHeader(record.key, 'name', e.target.value)}
@@ -330,7 +453,7 @@ export const HttpTestTool: React.FC = () => {
             <Table.Column
               title="值"
               dataIndex="value"
-              render={(text, record) => (
+              render={(text, record: any) => (
                 <Input
                   value={text}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateHeader(record.key, 'value', e.target.value)}
@@ -341,7 +464,7 @@ export const HttpTestTool: React.FC = () => {
             />
             <Table.Column
               title="操作"
-              render={(_, record) => (
+              render={(_, record: any) => (
                 <Tooltip title="删除">
                   <Button
                     type="text"
@@ -487,8 +610,9 @@ export const HttpTestTool: React.FC = () => {
         </Panel>
       </Collapse>
 
+      {/* 请求体 */}
       <Card
-        title={`请求体 (${bodyType === 'json' ? 'JSON' : bodyType === 'form' ? '表单' : '文本'})`}
+        title={`请求体 (${bodyTypeLabel[bodyType]})`}
         style={{ marginBottom: '16px' }}
         extra={
           <Select
@@ -499,24 +623,87 @@ export const HttpTestTool: React.FC = () => {
             <Option value="json">JSON</Option>
             <Option value="form">表单</Option>
             <Option value="text">文本</Option>
+            <Option value="multipart">文件上传</Option>
           </Select>
         }
       >
-        <Input.TextArea
-          value={body}
-          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setBody(e.target.value)}
-          placeholder={
-            bodyType === 'json'
-              ? '{"key": "value"}'
-              : bodyType === 'form'
-              ? 'key1=value1\nkey2=value2'
-              : '请输入请求体内容'
-          }
-          rows={6}
-          style={{ fontFamily: 'monospace, monospace', fontSize: '13px' }}
-          autoSize={{ minRows: 6, maxRows: 16 }}
-          disabled={method === 'GET' || method === 'HEAD'}
-        />
+        {bodyType === 'multipart' ? (
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Table
+              dataSource={uploadFiles}
+              pagination={false}
+              rowKey="key"
+              size="small"
+              bordered={false}
+              footer={() => (
+                <Button type="dashed" icon={<UploadOutlined />} onClick={addUploadFile}>
+                  添加文件
+                </Button>
+              )}
+            >
+              <Table.Column
+                title="字段名"
+                dataIndex="fieldName"
+                render={(text, record: any) => (
+                  <Input
+                    value={text}
+                    onChange={(e) => updateFileFieldName(record.key, e.target.value)}
+                    placeholder="字段名"
+                    style={{ width: '100%' }}
+                  />
+                )}
+              />
+              <Table.Column
+                title="文件名"
+                dataIndex="fileName"
+                render={(text) => (
+                  <span><FileOutlined style={{ marginRight: 4 }} />{text}</span>
+                )}
+              />
+              <Table.Column
+                title="操作"
+                render={(_, record: any) => (
+                  <Tooltip title="删除">
+                    <Button
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => removeUploadFile(record.key)}
+                    />
+                  </Tooltip>
+                )}
+              />
+            </Table>
+
+            <Input.TextArea
+              value={body}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setBody(e.target.value)}
+              placeholder="附加表单字段（可选）&#10;key1=value1&#10;key2=value2"
+              rows={4}
+              style={{ fontFamily: 'monospace, monospace', fontSize: '13px' }}
+              autoSize={{ minRows: 4, maxRows: 8 }}
+            />
+            <div style={{ color: '#999', fontSize: '12px' }}>
+              提示：Multipart 模式下，附加字段会作为普通表单字段随文件一起上传
+            </div>
+          </Space>
+        ) : (
+          <Input.TextArea
+            value={body}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setBody(e.target.value)}
+            placeholder={
+              bodyType === 'json'
+                ? '{"key": "value"}'
+                : bodyType === 'form'
+                ? 'key1=value1\nkey2=value2'
+                : '请输入请求体内容'
+            }
+            rows={6}
+            style={{ fontFamily: 'monospace, monospace', fontSize: '13px' }}
+            autoSize={{ minRows: 6, maxRows: 16 }}
+            disabled={method === 'GET' || method === 'HEAD'}
+          />
+        )}
         {method === 'GET' || method === 'HEAD' ? (
           <div style={{ marginTop: '8px', color: '#999', fontSize: '12px' }}>
             GET/HEAD 请求不支持请求体

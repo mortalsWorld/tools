@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { Layout, Menu, Button, theme, ConfigProvider, Typography } from 'antd';
 import { 
   MenuFoldOutlined, 
@@ -286,11 +286,13 @@ const MainLayoutContent: React.FC<{
           }}
         >
           {currentTool?.component ? (
-            currentTool.id === 'welcome' ? (
-              <currentTool.component onNavigate={setSelectedKey} />
-            ) : (
-              <currentTool.component />
-            )
+            <Suspense fallback={<div style={{ padding: '48px', textAlign: 'center', color: '#999' }}>加载中...</div>}>
+              {currentTool.id === 'welcome' ? (
+                <currentTool.component onNavigate={setSelectedKey} />
+              ) : (
+                <currentTool.component />
+              )}
+            </Suspense>
           ) : (
             children
           )}

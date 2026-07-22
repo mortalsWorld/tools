@@ -14,12 +14,27 @@ export default defineConfig({
     },
     build: {
         outDir: 'dist',
+        minify: 'esbuild',
+        target: 'es2020',
+        cssCodeSplit: true,
         rollupOptions: {
             output: {
                 manualChunks(id) {
                     if (id.includes('node_modules')) {
-                        if (id.includes('react') || id.includes('react-dom')) {
-                            return 'vendor';
+                        if (id.includes('antd') || id.includes('@ant-design')) {
+                            return 'antd';
+                        }
+                        if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) {
+                            return 'react';
+                        }
+                        if (id.includes('highlight.js') || id.includes('markdown-it')) {
+                            return 'markdown';
+                        }
+                        if (id.includes('@dnd-kit')) {
+                            return 'dndkit';
+                        }
+                        if (id.includes('@tauri-apps')) {
+                            return 'tauri';
                         }
                         return 'vendor';
                     }

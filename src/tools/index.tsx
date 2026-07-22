@@ -1,20 +1,6 @@
+import { lazy } from 'react';
 import { toolRegistry } from './registry'
 import { WelcomeTool } from './examples/WelcomeTool'
-import { CodeFormatter } from './text/CodeFormatter'
-import { MarkdownPreview } from './text/MarkdownPreview'
-import { RegexTool } from './text/RegexTool'
-import { EncoderTool } from './encoding/EncoderTool'
-import { DateTimeTool } from './datetime/DateTimeTool'
-import { FileSearchTool } from './filesearch/FileSearchTool'
-import { FileLauncherTool } from './filelauncher/FileLauncherTool'
-import { WebOpenerTool } from './webopener/WebOpenerTool'
-import { NetworkTool } from './network/NetworkTool'
-import { SubnetConverterTool } from './network/SubnetConverterTool'
-import { IPLookupTool } from './network/IPLookupTool'
-import { HttpTestTool } from './network/HttpTestTool'
-import { ProcessTool } from './system/ProcessTool'
-import { PasswordTool } from './security/PasswordTool'
-import { SettingsTool } from './settings/SettingsTool'
 import {
   HomeOutlined,
   FileTextOutlined,
@@ -30,6 +16,27 @@ import {
   CalculatorOutlined,
   SendOutlined
 } from '@ant-design/icons'
+
+const lazyNamed = <T extends { [key: string]: React.ComponentType<any> }, K extends keyof T>(
+  importFn: () => Promise<T>,
+  name: K
+) => lazy(() => importFn().then(m => ({ default: m[name] } as { default: React.ComponentType<any> })));
+
+const CodeFormatter = lazyNamed(() => import('./text/CodeFormatter'), 'CodeFormatter');
+const MarkdownPreview = lazyNamed(() => import('./text/MarkdownPreview'), 'MarkdownPreview');
+const RegexTool = lazyNamed(() => import('./text/RegexTool'), 'RegexTool');
+const EncoderTool = lazyNamed(() => import('./encoding/EncoderTool'), 'EncoderTool');
+const DateTimeTool = lazyNamed(() => import('./datetime/DateTimeTool'), 'DateTimeTool');
+const FileSearchTool = lazyNamed(() => import('./filesearch/FileSearchTool'), 'FileSearchTool');
+const FileLauncherTool = lazyNamed(() => import('./filelauncher/FileLauncherTool'), 'FileLauncherTool');
+const WebOpenerTool = lazyNamed(() => import('./webopener/WebOpenerTool'), 'WebOpenerTool');
+const NetworkTool = lazyNamed(() => import('./network/NetworkTool'), 'NetworkTool');
+const SubnetConverterTool = lazyNamed(() => import('./network/SubnetConverterTool'), 'SubnetConverterTool');
+const IPLookupTool = lazyNamed(() => import('./network/IPLookupTool'), 'IPLookupTool');
+const HttpTestTool = lazyNamed(() => import('./network/HttpTestTool'), 'HttpTestTool');
+const ProcessTool = lazyNamed(() => import('./system/ProcessTool'), 'ProcessTool');
+const PasswordTool = lazyNamed(() => import('./security/PasswordTool'), 'PasswordTool');
+const SettingsTool = lazyNamed(() => import('./settings/SettingsTool'), 'SettingsTool');
 
 export const initializeTools = () => {
   toolRegistry.registerCategory({
@@ -92,7 +99,6 @@ export const initializeTools = () => {
     icon: <SettingOutlined />
   })
 
-  // General tools
   toolRegistry.registerTool({
     id: 'welcome',
     name: '欢迎',
@@ -102,7 +108,6 @@ export const initializeTools = () => {
     component: WelcomeTool
   })
 
-  // Text tools
   toolRegistry.registerTool({
     id: 'code-formatter',
     name: '代码格式化',
@@ -130,7 +135,6 @@ export const initializeTools = () => {
     component: RegexTool
   })
 
-  // Encoding tools
   toolRegistry.registerTool({
     id: 'encoder',
     name: '编码解码',
@@ -140,7 +144,6 @@ export const initializeTools = () => {
     component: EncoderTool
   })
 
-  // Date time tools
   toolRegistry.registerTool({
     id: 'datetime',
     name: '时间日期转换',
@@ -150,7 +153,6 @@ export const initializeTools = () => {
     component: DateTimeTool
   })
 
-  // File search tools
   toolRegistry.registerTool({
     id: 'file-search',
     name: '文件搜索',
@@ -160,7 +162,6 @@ export const initializeTools = () => {
     component: FileSearchTool
   })
 
-  // Quick tools
   toolRegistry.registerTool({
     id: 'file-launcher',
     name: '文件快速启动',
@@ -179,7 +180,6 @@ export const initializeTools = () => {
     component: WebOpenerTool
   })
 
-  // Network tools
   toolRegistry.registerTool({
     id: 'network',
     name: '网络信息',
@@ -216,7 +216,6 @@ export const initializeTools = () => {
     component: HttpTestTool
   })
 
-  // System tools
   toolRegistry.registerTool({
     id: 'process-tool',
     name: '进程查看',
@@ -226,7 +225,6 @@ export const initializeTools = () => {
     component: ProcessTool
   })
 
-  // Quick tools - 密码管理移到快捷工具下
   toolRegistry.registerTool({
     id: 'password-tool',
     name: '密码管理',
@@ -236,7 +234,6 @@ export const initializeTools = () => {
     component: PasswordTool
   })
 
-  // Settings tools
   toolRegistry.registerTool({
     id: 'settings',
     name: '设置',
