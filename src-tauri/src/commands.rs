@@ -4,22 +4,27 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
+use std::os::windows::process::CommandExt;
 use tauri::command;
 use tauri::Emitter;
 use tauri::Manager;
+use crate::AppState;
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use walkdir::WalkDir;
 use rand::Rng;
 use rand::prelude::SliceRandom;
 use base64::Engine;
+use png;
 
+/// 获取应用程序配置目录路径
 fn get_config_dir() -> PathBuf {
     let exe_path = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("."));
     let app_dir = exe_path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| PathBuf::from("."));
     app_dir.join("config")
 }
 
+/// 确保配置目录存在，不存在则创建
 fn ensure_config_dir() -> std::io::Result<()> {
     let config_dir = get_config_dir();
     if !config_dir.exists() {
@@ -28,6 +33,28 @@ fn ensure_config_dir() -> std::io::Result<()> {
     Ok(())
 }
 
+/// 安全验证配置文件名，防止路径穿越攻击
+/// 只允许纯文件名（不含路径分隔符），且必须以 .json 结尾
+fn validate_config_name(name: &str) -> Result<PathBuf, String> {
+    if name.is_empty() {
+        return Err("配置文件名不能为空".into());
+    }
+    // 拒绝路径分隔符和跳目录
+    if name.contains("..") || name.contains('/') || name.contains('\\') {
+        return Err("配置文件名包含非法路径字符".into());
+    }
+    // 拒绝隐藏文件
+    if name.starts_with('.') {
+        return Err("配置文件名不能以点开头".into());
+    }
+    // 限定允许的扩展名
+    if !name.ends_with(".json") {
+        return Err("仅支持 .json 配置文件".into());
+    }
+    Ok(PathBuf::from(name))
+}
+
+/// 将字节数格式化为人类可读的字符串（GB/MB/KB/B）
 fn format_bytes(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = KB * 1024;
@@ -46,6 +73,7 @@ fn format_bytes(bytes: u64) -> String {
 
 // ============================================================================
 // 加密工具函数（替代 Electron safeStorage）
+// 提供 AES-256-GCM 加密、XOR 兼容解密、密码字段自动加解密等功能
 // ============================================================================
 
 
@@ -64,6 +92,7 @@ const VERSION_XOR: u8 = 0x01;   // 旧版本：XOR 加密（已弃用，仅用�
 const VERSION_AES: u8 = 0x02;   // 新版本：AES-256-GCM 加密
 
 /// 获取或生成安全的随机加密密钥（32字节，用于 AES-256）
+/// 密钥会持久化存储在配置目录中
 fn get_encryption_key() -> Vec<u8> {
     let config_dir = get_config_dir();
     let key_path = config_dir.join("encryption-key.dat");
@@ -87,11 +116,13 @@ fn get_encryption_key() -> Vec<u8> {
 }
 
 // ---- 旧版本 XOR 加密（仅用于兼容解密） ----
+/// 使用 XOR 算法加密数据（已弃用，仅用于兼容旧版本解密）
 fn xor_encrypt(data: &[u8], key: &[u8]) -> Vec<u8> {
     data.iter().enumerate().map(|(i, &b)| b ^ key[i % key.len()]).collect()
 }
 
 // ---- 新版本 AES-256-GCM 加密 ----
+/// 使用 AES-256-GCM 算法加密数据
 fn aes_encrypt(data: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
     let cipher = Aes256Gcm::new_from_slice(key)
         .map_err(|e| format!("AES 密钥初始化失败: {}", e))?;
@@ -114,6 +145,7 @@ fn aes_encrypt(data: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
     Ok(result)
 }
 
+/// 使用 AES-256-GCM 算法解密数据
 fn aes_decrypt(data: &[u8], key: &[u8]) -> Result<String, String> {
     if data.len() < 13 {
         return Err("AES 加密数据太短".to_string());
@@ -134,41 +166,47 @@ fn aes_decrypt(data: &[u8], key: &[u8]) -> Result<String, String> {
 }
 
 /// 加密字符串（使用 AES-256-GCM）
-fn encrypt_string(data: &str) -> String {
+/// 安全修复：加密失败时返回错误而非回退到明文
+/// 将明文字符串加密后返回 base64 编码的密文
+fn encrypt_string(data: &str) -> Result<String, String> {
     let key = get_encryption_key();
-    match aes_encrypt(data.as_bytes(), &key) {
-        Ok(bytes) => base64::engine::general_purpose::STANDARD.encode(&bytes),
-        Err(e) => {
+    aes_encrypt(data.as_bytes(), &key)
+        .map(|bytes| base64::engine::general_purpose::STANDARD.encode(&bytes))
+        .map_err(|e| {
             log::error!("加密失败: {}", e);
-            // 回退：返回原始数据的 base64（标记为未加密）
-            format!("__b64__{}", base64::engine::general_purpose::STANDARD.encode(data))
-        }
-    }
+            format!("加密失败: {}", e)
+        })
 }
 
 /// 解密字符串（兼容旧版本 XOR 和新版本 AES）
-fn decrypt_string(data: &str) -> String {
+/// 安全修复：解密失败时返回错误而非回退到密文
+/// 将 base64 编码的密文解密为明文字符串
+fn decrypt_string(data: &str) -> Result<String, String> {
     if data.is_empty() {
-        return "".to_string();
+        return Ok("".to_string());
     }
     
-    // 处理回退格式（未加密的 base64）
+    // 处理旧版本的明文 base64 回退格式（仅用于兼容迁移）
     if data.starts_with("__b64__") {
         match base64::engine::general_purpose::STANDARD.decode(&data[7..]) {
-            Ok(bytes) => String::from_utf8_lossy(&bytes).to_string(),
-            Err(_) => data.to_string(),
+            Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).to_string()),
+            Err(e) => {
+                log::error!("base64 解码失败: {}", e);
+                Err(format!("解密失败: base64 解码错误"))
+            }
         }
     } else {
         // 检查是否为 base64 编码的加密数据
         let base64_regex = Regex::new(r"^[A-Za-z0-9+/=]{20,}$").unwrap();
         if !base64_regex.is_match(data) {
-            return data.to_string();
+            // 不是 base64，可能是未加密的明文（新文件）
+            return Ok(data.to_string());
         }
         
         match base64::engine::general_purpose::STANDARD.decode(data) {
             Ok(decoded) => {
                 if decoded.is_empty() {
-                    return data.to_string();
+                    return Ok(data.to_string());
                 }
                 
                 let (version, payload) = decoded.split_first().unwrap();
@@ -176,30 +214,31 @@ fn decrypt_string(data: &str) -> String {
                     VERSION_XOR => {
                         // 旧版本：使用硬编码密钥 XOR 解密
                         let decrypted = xor_encrypt(payload, LEGACY_KEY);
-                        String::from_utf8_lossy(&decrypted).to_string()
+                        Ok(String::from_utf8_lossy(&decrypted).to_string())
                     }
                     VERSION_AES => {
                         // 新版本：使用随机密钥 AES-256-GCM 解密
                         let key = get_encryption_key();
-                        match aes_decrypt(payload, &key) {
-                            Ok(plain) => plain,
-                            Err(e) => {
-                                log::warn!("AES 解密失败（可能密钥不匹配）: {}", e);
-                                data.to_string()
-                            }
-                        }
+                        aes_decrypt(payload, &key).map_err(|e| {
+                            log::error!("AES 解密失败（密钥不匹配或数据损坏）: {}", e);
+                            format!("解密失败: {}", e)
+                        })
                     }
                     _ => {
-                        // 未知版本，返回原始数据
-                        String::from_utf8_lossy(&decoded).to_string()
+                        log::error!("未知的加密版本: {}", version);
+                        Err(format!("解密失败: 未知的加密版本"))
                     }
                 }
             }
-            Err(_) => data.to_string(),
+            Err(e) => {
+                log::error!("base64 解码失败: {}", e);
+                Err(format!("解密失败: base64 解码错误"))
+            }
         }
     }
 }
 
+/// 递归遍历 JSON 数据，自动加密所有 password 字段
 fn encrypt_password_fields(data: &serde_json::Value) -> serde_json::Value {
     match data {
         serde_json::Value::Object(obj) => {
@@ -208,8 +247,18 @@ fn encrypt_password_fields(data: &serde_json::Value) -> serde_json::Value {
                 if key == "password" && value.is_string() {
                     let password = value.as_str().unwrap_or("");
                     if !password.is_empty() {
-                        new_obj.insert(key.clone(), serde_json::Value::String(encrypt_string(password)));
-                        new_obj.insert("__encrypted__".to_string(), serde_json::Value::Bool(true));
+                        // 安全修复：加密失败时记录错误并使用占位符
+                        match encrypt_string(password) {
+                            Ok(encrypted) => {
+                                new_obj.insert(key.clone(), serde_json::Value::String(encrypted));
+                                new_obj.insert("__encrypted__".to_string(), serde_json::Value::Bool(true));
+                            }
+                            Err(e) => {
+                                log::error!("密码加密失败: {}", e);
+                                // 加密失败不应继续保存，使用占位符提示用户
+                                new_obj.insert(key.clone(), serde_json::Value::String("[加密失败，请重新输入]".to_string()));
+                            }
+                        }
                         continue;
                     }
                 }
@@ -228,11 +277,11 @@ fn encrypt_password_fields(data: &serde_json::Value) -> serde_json::Value {
     }
 }
 
+/// 递归遍历 JSON 数据，自动解密所有 password 字段
 fn decrypt_password_fields(data: &serde_json::Value) -> serde_json::Value {
     match data {
         serde_json::Value::Object(obj) => {
             let mut new_obj = serde_json::Map::new();
-            let is_encrypted = obj.get("__encrypted__").and_then(|v| v.as_bool()).unwrap_or(false);
             
             for (key, value) in obj.iter() {
                 if key == "__encrypted__" {
@@ -240,13 +289,17 @@ fn decrypt_password_fields(data: &serde_json::Value) -> serde_json::Value {
                 }
                 if key == "password" && value.is_string() {
                     let encrypted = value.as_str().unwrap_or("");
-                    let decrypted = decrypt_string(encrypted);
                     
-                    if is_encrypted && decrypted == encrypted {
-                        new_obj.insert(key.clone(), serde_json::Value::String("[需要重新输入密码]".to_string()));
-                    } else {
-                        new_obj.insert(key.clone(), serde_json::Value::String(decrypted));
-                    }
+                    // 安全修复：解密失败时返回错误提示而非密文
+                    let decrypted = match decrypt_string(encrypted) {
+                        Ok(plain) => plain,
+                        Err(e) => {
+                            log::error!("密码解密失败: {}", e);
+                            "[需要重新输入密码]".to_string()
+                        }
+                    };
+                    
+                    new_obj.insert(key.clone(), serde_json::Value::String(decrypted));
                     continue;
                 }
                 new_obj.insert(key.clone(), decrypt_password_fields(value));
@@ -266,30 +319,38 @@ fn decrypt_password_fields(data: &serde_json::Value) -> serde_json::Value {
 
 // ============================================================================
 // 文件系统命令
+// 提供目录/文件选择、配置读写、文件搜索、安全打开等功能
 // ============================================================================
 
+/// 打开对话框让用户选择目录
 #[command]
 pub async fn select_directory(app: tauri::AppHandle) -> Option<String> {
     let dir = app.dialog().file().blocking_pick_folder();
     dir.map(|p| p.to_string())
 }
 
+/// 打开对话框让用户选择文件
 #[command]
 pub async fn select_file(app: tauri::AppHandle) -> Option<String> {
     let file = app.dialog().file().blocking_pick_file();
     file.map(|p| p.to_string())
 }
 
+/// 打开对话框让用户选择备份目录
 #[command]
 pub async fn select_backup_directory(app: tauri::AppHandle) -> Option<String> {
     let dir = app.dialog().file().blocking_pick_folder();
     dir.map(|p| p.to_string())
 }
 
+/// 加载指定名称的配置文件，passwords.json 会自动解密密码字段
 #[command]
 pub async fn load_config(file_name: String) -> Result<serde_json::Value, String> {
     ensure_config_dir().map_err(|e| e.to_string())?;
-    let config_path = get_config_dir().join(&file_name);
+    
+    // 安全验证：防止路径穿越攻击
+    let safe_name = validate_config_name(&file_name)?;
+    let config_path = get_config_dir().join(&safe_name);
     
     if !config_path.exists() {
         return Ok(serde_json::json!(null));
@@ -308,10 +369,14 @@ pub async fn load_config(file_name: String) -> Result<serde_json::Value, String>
     Ok(data)
 }
 
+/// 保存指定名称的配置文件，passwords.json 会自动加密密码字段
 #[command]
 pub async fn save_config(file_name: String, data: serde_json::Value) -> Result<bool, String> {
     ensure_config_dir().map_err(|e| e.to_string())?;
-    let config_path = get_config_dir().join(&file_name);
+    
+    // 安全验证：防止路径穿越攻击
+    let safe_name = validate_config_name(&file_name)?;
+    let config_path = get_config_dir().join(&safe_name);
     
     let data_to_save = if file_name == "passwords.json" {
         encrypt_password_fields(&data)
@@ -331,6 +396,7 @@ pub async fn save_config(file_name: String, data: serde_json::Value) -> Result<b
     Ok(true)
 }
 
+/// 在指定目录中搜索文件名包含指定模式的文件
 #[command]
 pub async fn search_files(directory: String, pattern: String) -> Vec<String> {
     let mut results = Vec::new();
@@ -350,22 +416,95 @@ pub async fn search_files(directory: String, pattern: String) -> Vec<String> {
     results
 }
 
+/// 安全验证打开目标（文件路径或 URL）
+/// 防止任意协议执行和本地文件泄露
+/// 只允许 http/https/mailto/tel 等安全协议及本地文件路径
+fn validate_open_target(target: &str) -> Result<(), String> {
+    if target.is_empty() {
+        return Err("路径不能为空".into());
+    }
+
+    // 先判断是否为 Windows 本地路径（如 C:\...、\\server\...）
+    let is_windows_path = {
+        let bytes = target.as_bytes();
+        // 盘符路径: A-Z 后跟 :\ 或 :/
+        if bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' {
+            true
+        }
+        // UNC 路径: \\ 开头
+        else if bytes.len() >= 2 && bytes[0] == b'\\' && bytes[1] == b'\\' {
+            true
+        }
+        // 相对路径: .\ 或 ..\
+        else if target.starts_with(".\\") || target.starts_with("..\\") {
+            true
+        } else {
+            false
+        }
+    };
+
+    if is_windows_path {
+        // 检查路径穿越
+        if target.contains("..\\") || target.contains("../") {
+            return Err("路径不能包含 '..'".into());
+        }
+        log::debug!("[validate_open_target] 允许本地路径: {}", target);
+        return Ok(());
+    }
+
+    // 非 Windows 路径，尝试解析为 URL
+    if let Ok(url) = reqwest::Url::parse(target) {
+        // 有 scheme 的视为 URL
+        match url.scheme() {
+            // 允许的安全协议
+            "http" | "https" | "mailto" | "tel" => Ok(()),
+            // 禁止的协议
+            "file" => Err("禁止通过 file:// 协议访问本地文件".into()),
+            "javascript" => Err("禁止使用 javascript: 协议".into()),
+            "data" => Err("禁止使用 data: 协议".into()),
+            "vbscript" => Err("禁止使用 vbscript: 协议".into()),
+            scheme => {
+                // Windows 特殊协议（如 ms-settings:）
+                if scheme.starts_with("ms-") {
+                    log::info!("[validate_open_target] 允许 Windows 协议: {}", scheme);
+                    Ok(())
+                } else {
+                    Err(format!("不支持的协议: {}", scheme))
+                }
+            }
+        }
+    } else {
+        // 不是有效 URL，也不是 Windows 路径，视为普通路径
+        if target.contains("..") {
+            return Err("路径不能包含 '..'".into());
+        }
+        log::debug!("[validate_open_target] 允许普通路径: {}", target);
+        Ok(())
+    }
+}
+
+/// 使用系统默认程序打开本地文件
 #[command]
 pub async fn open_file(path: String) -> Result<(), String> {
-    let _ = open::that(&path);
+    validate_open_target(&path)?;
+    open::that(&path).map_err(|e| format!("打开文件失败: {}", e))?;
     Ok(())
 }
 
+/// 使用系统默认浏览器打开 URL
 #[command]
 pub async fn open_url(url: String) -> Result<(), String> {
-    let _ = open::that(&url);
+    validate_open_target(&url)?;
+    open::that(&url).map_err(|e| format!("打开 URL 失败: {}", e))?;
     Ok(())
 }
 
 // ============================================================================
 // 系统信息命令
+// 提供进程列表、系统资源、网络信息、进程终止等功能
 // ============================================================================
 
+/// 进程信息数据结构
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProcessInfo {
     pub pid: u32,
@@ -373,14 +512,17 @@ pub struct ProcessInfo {
     pub memory: String,
     pub memory_bytes: u64,
     pub cpu_usage: f64,
+    pub ports: Vec<u16>,
 }
 
+/// 系统信息数据结构（包含 CPU 和内存信息）
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SystemInfo {
     pub cpu: CpuInfo,
     pub memory: MemoryInfo,
 }
 
+/// CPU 信息数据结构
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CpuInfo {
     pub name: String,
@@ -390,6 +532,7 @@ pub struct CpuInfo {
     pub usage: Option<f32>,
 }
 
+/// 内存信息数据结构
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MemoryInfo {
     pub total: u64,
@@ -397,35 +540,145 @@ pub struct MemoryInfo {
     pub used: u64,
 }
 
+/// 网络信息数据结构（包含 IPv4 和 IPv6 地址）
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NetworkInfo {
     pub ipv4: Vec<String>,
     pub ipv6: Vec<String>,
 }
 
+/// 获取系统进程列表，按内存占用排序
 #[command]
 pub async fn get_processes() -> Vec<ProcessInfo> {
     let mut system = sysinfo::System::new_all();
     system.refresh_all();
+
+    let pid_ports = get_pid_ports();
+    let total_processes = system.processes().len();
+    let mut matched_count = 0;
     
     let mut processes: Vec<ProcessInfo> = system.processes()
         .iter()
         .map(|(pid, process)| {
             let memory_bytes = process.memory();
+            let ports = pid_ports.get(&pid.as_u32()).cloned().unwrap_or_default();
+            if !ports.is_empty() {
+                matched_count += 1;
+            }
             ProcessInfo {
                 pid: pid.as_u32(),
                 name: process.name().to_string_lossy().to_string(),
                 memory: format_bytes(memory_bytes),
                 memory_bytes,
                 cpu_usage: process.cpu_usage() as f64,
+                ports,
             }
         })
         .collect();
+    
+    log::info!(
+        "[get_processes] 总进程数: {}, 有端口的进程: {}, pid_ports 键数: {}",
+        total_processes, matched_count, pid_ports.len()
+    );
+    // 输出前 5 个有端口的进程用于调试
+    for p in processes.iter().filter(|p| !p.ports.is_empty()).take(5) {
+        log::info!("[get_processes] 有端口的进程: PID={}, name={}, ports={:?}", p.pid, p.name, p.ports);
+    }
     
     processes.sort_by(|a, b| b.memory_bytes.cmp(&a.memory_bytes));
     processes
 }
 
+/// 获取每个进程占用的网络端口映射（通过 netstat 命令解析）
+fn get_pid_ports() -> std::collections::HashMap<u32, Vec<u16>> {
+    let mut pid_ports: std::collections::HashMap<u32, std::collections::HashSet<u16>> = std::collections::HashMap::new();
+
+    #[cfg(windows)]
+    {
+        let output = Command::new("netstat")
+            .args(["-ano"])
+            .creation_flags(0x08000000)
+            .output();
+
+        match output {
+            Ok(output) => {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                log::info!("[get_pid_ports] netstat -ano 退出码: {}", output.status.code().unwrap_or(-1));
+                if !stderr.is_empty() {
+                    log::warn!("[get_pid_ports] netstat stderr: {}", stderr);
+                }
+                // 输出原始内容的前 15 行用于调试
+                let preview: Vec<&str> = stdout.lines().take(15).collect();
+                log::info!("[get_pid_ports] netstat 原始输出前15行:\n{}", preview.join("\n"));
+
+                let mut parsed_count = 0;
+                let mut skip_count = 0;
+                for line in stdout.lines() {
+                    let line = line.trim();
+                    if !line.starts_with("TCP") && !line.starts_with("UDP") {
+                        continue;
+                    }
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    // TCP: Proto LocalAddr ForeignAddr State PID  => PID 在 parts[4]
+                    // UDP: Proto LocalAddr ForeignAddr PID        => PID 在 parts[3]
+                    let (local_addr, remote_addr, pid_str) = if line.starts_with("TCP") && parts.len() >= 5 {
+                        (parts[1], parts[2], parts[4])
+                    } else if line.starts_with("UDP") && parts.len() >= 4 {
+                        (parts[1], parts[2], parts[3])
+                    } else {
+                        log::debug!("[get_pid_ports] 跳过格式不符行 (parts={}): {}", parts.len(), line);
+                        skip_count += 1;
+                        continue;
+                    };
+
+                    let pid = match pid_str.parse::<u32>() {
+                        Ok(p) if p > 0 => p,
+                        _ => {
+                            log::debug!("[get_pid_ports] 跳过无效PID '{}' 行: {}", pid_str, line);
+                            skip_count += 1;
+                            continue;
+                        }
+                    };
+
+                    let ports = pid_ports.entry(pid).or_insert_with(std::collections::HashSet::new);
+
+                    // 提取本地地址端口
+                    if let Some(port_str) = local_addr.split(':').last() {
+                        if let Ok(port) = port_str.parse::<u16>() {
+                            ports.insert(port);
+                            parsed_count += 1;
+                        }
+                    }
+                    // 同时提取远程地址端口（如外部 443 端口）
+                    if let Some(port_str) = remote_addr.split(':').last() {
+                        if let Ok(port) = port_str.parse::<u16>() {
+                            if port > 0 {
+                                ports.insert(port);
+                            }
+                        }
+                    }
+                }
+                log::info!(
+                    "[get_pid_ports] 解析完成: {} 条有效记录, 跳过 {} 条, 涉及 {} 个进程",
+                    parsed_count, skip_count, pid_ports.len()
+                );
+                // 输出前 10 个进程的端口映射用于调试
+                for (i, (pid, ports)) in pid_ports.iter().take(10).enumerate() {
+                    log::info!("[get_pid_ports] 进程 {}: PID={}, ports={:?}", i, pid, ports);
+                }
+            }
+            Err(e) => {
+                log::error!("[get_pid_ports] netstat -ano 命令执行失败: {}", e);
+            }
+        }
+    }
+
+    // 将 HashSet 转为 Vec
+    pid_ports.into_iter().map(|(k, v)| (k, v.into_iter().collect())).collect()
+}
+
+/// 获取系统 CPU 和内存信息
 #[command]
 pub async fn get_system_info() -> SystemInfo {
     let mut system = sysinfo::System::new_all();
@@ -456,6 +709,7 @@ pub async fn get_system_info() -> SystemInfo {
     }
 }
 
+/// 获取本机网络接口的 IPv4 和 IPv6 地址列表
 #[command]
 pub async fn get_local_network_info() -> NetworkInfo {
     let networks = sysinfo::Networks::new_with_refreshed_list();
@@ -484,6 +738,7 @@ pub async fn get_local_network_info() -> NetworkInfo {
     NetworkInfo { ipv4, ipv6 }
 }
 
+/// 强制终止指定 PID 的单个进程
 #[command]
 pub async fn kill_process(pid: u32) -> Result<serde_json::Value, String> {
     let output = Command::new("taskkill")
@@ -498,6 +753,7 @@ pub async fn kill_process(pid: u32) -> Result<serde_json::Value, String> {
     }
 }
 
+/// 批量强制终止多个进程
 #[command]
 pub async fn kill_processes(pids: Vec<u32>) -> Result<serde_json::Value, String> {
     let mut errors: Vec<u32> = Vec::new();
@@ -517,8 +773,10 @@ pub async fn kill_processes(pids: Vec<u32>) -> Result<serde_json::Value, String>
 
 // ============================================================================
 // 密码管理命令
+// 提供密码生成、密码库读写、密码增删改查等功能
 // ============================================================================
 
+/// 根据选项生成随机密码，支持自定义长度、数字、符号、大小写
 #[command]
 pub async fn generate_password(
     length: usize,
@@ -579,11 +837,13 @@ pub async fn generate_password(
     chars.into_iter().collect()
 }
 
+/// 获取密码库中的所有密码数据
 #[command]
 pub async fn get_passwords() -> Result<serde_json::Value, String> {
     load_config("passwords.json".to_string()).await
 }
 
+/// 保存或更新密码条目到密码库
 #[command]
 pub async fn save_password(password_data: serde_json::Value) -> Result<bool, String> {
     let mut passwords = load_config("passwords.json".to_string()).await?;
@@ -623,6 +883,7 @@ pub async fn save_password(password_data: serde_json::Value) -> Result<bool, Str
     save_config("passwords.json".to_string(), passwords).await
 }
 
+/// 从密码库中删除指定 ID 的密码条目
 #[command]
 pub async fn delete_password(id: String) -> Result<bool, String> {
     let mut passwords = load_config("passwords.json".to_string()).await?;
@@ -639,8 +900,10 @@ pub async fn delete_password(id: String) -> Result<bool, String> {
 
 // ============================================================================
 // 应用配置命令
+// 提供应用配置的读取、保存、重置等功能
 // ============================================================================
 
+/// 应用程序配置数据结构
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
@@ -680,6 +943,7 @@ pub struct AppConfig {
     pub favorite_tools: Vec<String>,
 }
 
+/// 读取应用程序配置，若不存在则返回默认配置
 #[command]
 pub async fn get_app_config() -> Result<AppConfig, String> {
     ensure_config_dir().map_err(|e| e.to_string())?;
@@ -717,6 +981,7 @@ pub async fn get_app_config() -> Result<AppConfig, String> {
     Ok(config)
 }
 
+/// 保存应用程序配置到配置文件
 #[command]
 pub async fn save_app_config(config: AppConfig) -> Result<bool, String> {
     ensure_config_dir().map_err(|e| e.to_string())?;
@@ -734,6 +999,7 @@ pub async fn save_app_config(config: AppConfig) -> Result<bool, String> {
     Ok(true)
 }
 
+/// 重置应用程序配置为默认值并保存
 #[command]
 pub async fn reset_app_config() -> Result<AppConfig, String> {
     let default_config = AppConfig {
@@ -761,8 +1027,10 @@ pub async fn reset_app_config() -> Result<AppConfig, String> {
 
 // ============================================================================
 // HTTP 请求命令（带代理支持）
+// 提供 HTTP 请求发送、文件上传、系统代理获取等功能
 // ============================================================================
 
+/// HTTP 响应数据结构
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HttpResponse {
@@ -773,6 +1041,16 @@ pub struct HttpResponse {
     pub duration: u64,
 }
 
+/// HTTP 文件上传字段数据结构
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HttpFileUpload {
+    pub field_name: String,
+    pub file_path: String,
+    pub file_name: String,
+}
+
+/// HTTP 请求选项数据结构（包含 URL、方法、头、代理等）
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HttpRequestOptions {
@@ -788,9 +1066,13 @@ pub struct HttpRequestOptions {
     pub proxy: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_system_proxy: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub query_params: Option<Vec<(String, String)>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub files: Option<Vec<HttpFileUpload>>,
 }
 
-// 获取系统代理配置（Windows）
+/// 获取系统代理配置（Windows 注册表读取）
 fn get_system_proxy() -> Option<String> {
     #[cfg(windows)]
     {
@@ -862,6 +1144,7 @@ fn get_system_proxy() -> Option<String> {
 
 /// 验证 HTTP 请求 URL 的安全性
 /// 禁止访问本地敏感端点和非标准协议
+/// 仅允许 http 和 https 协议
 fn validate_http_url(url: &str) -> Result<(), String> {
     let parsed = reqwest::Url::parse(url)
         .map_err(|e| format!("无效的 URL: {}", e))?;
@@ -885,14 +1168,15 @@ fn validate_http_url(url: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// 发送 HTTP 请求，支持自定义头、Query 参数、文件上传和代理
 #[command]
 pub async fn http_request(options: HttpRequestOptions) -> Result<HttpResponse, String> {
     // 安全验证：检查 URL 是否合法
     validate_http_url(&options.url)?;
-    
+
     let mut builder = reqwest::Client::builder()
         .timeout(std::time::Duration::from_millis(options.timeout_ms.unwrap_or(30000)));
-    
+
     // 确定使用的代理
     let proxy_to_use = if options.proxy.is_some() {
         options.proxy.clone()
@@ -901,16 +1185,16 @@ pub async fn http_request(options: HttpRequestOptions) -> Result<HttpResponse, S
     } else {
         None
     };
-    
+
     if let Some(proxy_url) = &proxy_to_use {
         let proxy = reqwest::Proxy::all(proxy_url)
             .map_err(|e| format!("代理配置错误: {}", e))?;
         builder = builder.proxy(proxy);
     }
-    
+
     let client = builder.build()
         .map_err(|e| e.to_string())?;
-    
+
     let method = match options.method.to_uppercase().as_str() {
         "GET" => reqwest::Method::GET,
         "POST" => reqwest::Method::POST,
@@ -919,34 +1203,83 @@ pub async fn http_request(options: HttpRequestOptions) -> Result<HttpResponse, S
         "PATCH" => reqwest::Method::PATCH,
         _ => reqwest::Method::GET,
     };
-    
+
+    // 构建 URL，拼接 query 参数
+    let mut url = options.url.clone();
+    if let Some(query_params) = &options.query_params {
+        if !query_params.is_empty() {
+            let separator = if url.contains('?') { '&' } else { '?' };
+            let query_string: Vec<String> = query_params
+                .iter()
+                .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
+                .collect();
+            url = format!("{}{}{}", url, separator, query_string.join("&"));
+        }
+    }
+
     let start = std::time::Instant::now();
-    
-    let mut request = client.request(method, &options.url);
-    
+
+    let mut request = client.request(method, &url);
+
     if let Some(headers) = &options.headers {
         for (key, value) in headers {
             request = request.header(key, value);
         }
     }
-    
-    if let Some(body) = &options.body {
+
+    // 处理文件上传（multipart/form-data）
+    if let Some(files) = &options.files {
+        if !files.is_empty() {
+            let mut form = reqwest::multipart::Form::new();
+
+            // 添加普通表单字段（从 body 解析）
+            if let Some(body) = &options.body {
+                if !body.is_empty() {
+                    for line in body.lines() {
+                        let parts: Vec<&str> = line.splitn(2, '=').collect();
+                        if parts.len() == 2 {
+                            form = form.text(parts[0].trim().to_string(), parts[1].trim().to_string());
+                        }
+                    }
+                }
+            }
+
+            // 添加文件
+            for file in files {
+                match tokio::fs::read(&file.file_path).await {
+                    Ok(file_bytes) => {
+                        let part = reqwest::multipart::Part::bytes(file_bytes)
+                            .file_name(file.file_name.clone());
+                        form = form.part(file.field_name.clone(), part);
+                    }
+                    Err(e) => {
+                        log::error!("读取文件失败 {}: {}", file.file_path, e);
+                        return Err(format!("读取文件失败: {}", e));
+                    }
+                }
+            }
+
+            request = request.multipart(form);
+        } else if let Some(body) = &options.body {
+            request = request.body(body.clone());
+        }
+    } else if let Some(body) = &options.body {
         request = request.body(body.clone());
     }
-    
+
     let response = request.send().await.map_err(|e| e.to_string())?;
-    
+
     let status = response.status().as_u16();
     let status_text = response.status().canonical_reason().unwrap_or("").to_string();
-    
+
     let headers: std::collections::HashMap<String, String> = response
         .headers()
         .iter()
         .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
         .collect();
-    
+
     let body = response.text().await.map_err(|e| e.to_string())?;
-    
+
     Ok(HttpResponse {
         status,
         status_text,
@@ -958,8 +1291,10 @@ pub async fn http_request(options: HttpRequestOptions) -> Result<HttpResponse, S
 
 // ============================================================================
 // 窗口控制命令
+// 提供窗口显示、隐藏、切换等控制功能
 // ============================================================================
 
+/// 显示主窗口并使其获得焦点
 #[command]
 pub async fn show_window(app: tauri::AppHandle) -> Result<bool, String> {
     if let Some(window) = app.get_webview_window("main") {
@@ -971,6 +1306,7 @@ pub async fn show_window(app: tauri::AppHandle) -> Result<bool, String> {
     }
 }
 
+/// 隐藏主窗口
 #[command]
 pub async fn hide_window(app: tauri::AppHandle) -> Result<bool, String> {
     if let Some(window) = app.get_webview_window("main") {
@@ -981,6 +1317,7 @@ pub async fn hide_window(app: tauri::AppHandle) -> Result<bool, String> {
     }
 }
 
+/// 切换主窗口的显示/隐藏状态
 #[command]
 pub async fn toggle_window(app: tauri::AppHandle) -> Result<bool, String> {
     if let Some(window) = app.get_webview_window("main") {
@@ -998,14 +1335,17 @@ pub async fn toggle_window(app: tauri::AppHandle) -> Result<bool, String> {
 
 // ============================================================================
 // 备份管理命令
+// 提供备份创建、列表查询、删除、恢复、导入等功能
 // ============================================================================
 
+/// 获取备份目录路径
 #[command]
 pub async fn get_backup_dir() -> String {
     let config_dir = get_config_dir();
     config_dir.join("backups").to_string_lossy().to_string()
 }
 
+/// 递归复制目录及其所有内容
 fn copy_directory(source: &PathBuf, destination: &PathBuf) -> std::io::Result<()> {
     fs::create_dir_all(destination)?;
     
@@ -1024,6 +1364,7 @@ fn copy_directory(source: &PathBuf, destination: &PathBuf) -> std::io::Result<()
     Ok(())
 }
 
+/// 递归删除目录及其所有内容
 fn remove_directory(dir: &PathBuf) -> std::io::Result<()> {
     if !dir.exists() {
         return Ok(());
@@ -1044,6 +1385,7 @@ fn remove_directory(dir: &PathBuf) -> std::io::Result<()> {
     Ok(())
 }
 
+/// 递归计算目录的总大小（字节）
 fn calculate_directory_size(dir: &PathBuf) -> u64 {
     let mut total_size = 0u64;
     
@@ -1062,6 +1404,7 @@ fn calculate_directory_size(dir: &PathBuf) -> u64 {
     total_size
 }
 
+/// 创建完整备份，包含所有配置文件，自动清理超出保留数量的旧备份
 #[command]
 pub async fn create_full_backup(note: Option<String>) -> Result<serde_json::Value, String> {
     let config_dir = get_config_dir();
@@ -1116,7 +1459,7 @@ pub async fn create_full_backup(note: Option<String>) -> Result<serde_json::Valu
     Ok(backup_info)
 }
 
-// 清理超出保留数量的旧备份
+/// 清理超出保留数量的旧备份
 fn cleanup_old_backups(backup_dir: &std::path::PathBuf) -> Result<(), String> {
     // 读取 app-config.json 获取 backup_count
     let config_path = get_config_dir().join("app-config.json");
@@ -1166,6 +1509,7 @@ fn cleanup_old_backups(backup_dir: &std::path::PathBuf) -> Result<(), String> {
     Ok(())
 }
 
+/// 获取所有备份列表，按时间倒序排列
 #[command]
 pub async fn get_backup_list() -> Result<Vec<serde_json::Value>, String> {
     let backup_dir = get_config_dir().join("backups");
@@ -1220,9 +1564,38 @@ pub async fn get_backup_list() -> Result<Vec<serde_json::Value>, String> {
     Ok(backups)
 }
 
+/// 安全验证备份 ID，防止路径穿越攻击
+/// 只允许字母、数字、连字符、下划线、点号和时间分隔符
+fn validate_backup_id(id: &str) -> Result<PathBuf, String> {
+    if id.is_empty() {
+        return Err("备份 ID 不能为空".into());
+    }
+    // 拒绝路径分隔符和跳目录
+    if id.contains("..") || id.contains('/') || id.contains('\\') {
+        return Err("备份 ID 包含非法路径字符".into());
+    }
+    // 只允许字母、数字、下划线、连字符、点号
+    if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' || c == 'T' || c == ':') {
+        return Err("备份 ID 包含非法字符".into());
+    }
+    Ok(PathBuf::from(id))
+}
+
+/// 删除指定 ID 的备份
 #[command]
 pub async fn delete_backup(backup_id: String) -> Result<bool, String> {
-    let backup_dir = get_config_dir().join("backups").join(&backup_id);
+    // 安全验证：防止路径穿越攻击
+    let safe_id = validate_backup_id(&backup_id)?;
+    let backup_dir = get_config_dir().join("backups").join(&safe_id);
+    
+    // 额外验证：确保路径仍在 backups 目录内
+    let backup_dir_canonical = backup_dir.canonicalize()
+        .map_err(|e| format!("备份目录解析失败: {}", e))?;
+    let backups_dir_canonical = get_config_dir().join("backups").canonicalize()
+        .map_err(|e| format!("备份父目录解析失败: {}", e))?;
+    if !backup_dir_canonical.starts_with(&backups_dir_canonical) {
+        return Err("备份路径越界".into());
+    }
     
     if !backup_dir.exists() {
         return Err(format!("备份不存在: {}", backup_id));
@@ -1232,9 +1605,21 @@ pub async fn delete_backup(backup_id: String) -> Result<bool, String> {
     Ok(true)
 }
 
+/// 从指定备份恢复配置数据
 #[command]
 pub async fn restore_backup(backup_id: String) -> Result<bool, String> {
-    let backup_path = get_config_dir().join("backups").join(&backup_id);
+    // 安全验证：防止路径穿越攻击
+    let safe_id = validate_backup_id(&backup_id)?;
+    let backup_path = get_config_dir().join("backups").join(&safe_id);
+    
+    // 额外验证：确保路径仍在 backups 目录内
+    let backup_path_canonical = backup_path.canonicalize()
+        .map_err(|e| format!("备份目录解析失败: {}", e))?;
+    let backups_dir_canonical = get_config_dir().join("backups").canonicalize()
+        .map_err(|e| format!("备份父目录解析失败: {}", e))?;
+    if !backup_path_canonical.starts_with(&backups_dir_canonical) {
+        return Err("备份路径越界".into());
+    }
     
     if !backup_path.exists() {
         return Err(format!("备份不存在: {}", backup_id));
@@ -1249,6 +1634,13 @@ pub async fn restore_backup(backup_id: String) -> Result<bool, String> {
     for entry in entries {
         let name = entry.file_name();
         if name == "backup-info.json" {
+            continue;
+        }
+        
+        // 安全验证：文件名不能包含路径穿越
+        let name_str = name.to_string_lossy();
+        if name_str.contains("..") || name_str.contains('/') || name_str.contains('\\') {
+            log::warn!("跳过可疑文件名: {}", name_str);
             continue;
         }
         
@@ -1268,6 +1660,7 @@ pub async fn restore_backup(backup_id: String) -> Result<bool, String> {
     Ok(true)
 }
 
+/// 从外部目录导入备份数据到当前配置目录
 #[command]
 pub async fn import_backup(backup_path: String) -> Result<bool, String> {
     let source_dir = PathBuf::from(&backup_path);
@@ -1292,8 +1685,23 @@ pub async fn import_backup(backup_path: String) -> Result<bool, String> {
             continue;
         }
         
+        // 安全验证：文件名不能包含路径穿越字符
+        let name_str = name.to_string_lossy();
+        if name_str.contains("..") || name_str.contains('/') || name_str.contains('\\') {
+            log::warn!("导入备份时跳过可疑文件名: {}", name_str);
+            continue;
+        }
+        
         let src_path = entry.path();
         let dest_path = config_dir.join(&name);
+        
+        // 安全验证：确保目标路径仍在 config_dir 内
+        let dest_path_canonical = dest_path.canonicalize().ok().unwrap_or_else(|| dest_path.clone());
+        let config_dir_canonical = config_dir.canonicalize().ok().unwrap_or_else(|| config_dir.clone());
+        if !dest_path_canonical.starts_with(&config_dir_canonical) {
+            log::warn!("导入备份时跳过越界路径: {}", dest_path.display());
+            continue;
+        }
         
         if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
             if dest_path.exists() {
@@ -1310,13 +1718,176 @@ pub async fn import_backup(backup_path: String) -> Result<bool, String> {
 
 // ============================================================================
 // 其他命令
+// 提供图标选择、文件图标获取、快捷方式解析、配置迁移等功能
 // ============================================================================
 
-#[command]
-pub async fn search_file_handle(_file_path: String) -> Vec<serde_json::Value> {
-    vec![]
+/// 搜索文件占用参数结构体
+#[derive(serde::Deserialize)]
+pub struct SearchFileArgs {
+    pub filePath: String,
 }
 
+/// 搜索占用指定文件的进程（匹配进程可执行文件路径）
+#[command]
+pub async fn search_file_handle(args: SearchFileArgs) -> Vec<serde_json::Value> {
+    let file_path = args.filePath;
+    log::info!("[search_file_handle] 接收到的文件路径: '{}'", file_path);
+    
+    if file_path.trim().is_empty() {
+        log::warn!("[search_file_handle] 文件路径为空，跳过查询");
+        return vec![];
+    }
+    
+    // PowerShell 字符串中的反斜杠需要转义，单引号需要双写以符合 WMI 过滤语法
+    let escaped_path = file_path.replace('\\', "\\\\").replace("'", "''");
+    log::debug!("[search_file_handle] 转义后的 WMI 路径: {}", escaped_path);
+    
+    // 判断是否为完整路径（含盘符或路径分隔符）
+    let is_full_path = file_path.contains(':') || file_path.contains('\\') || file_path.contains('/');
+    
+    log::info!("[search_file_handle] 是否完整路径: {}", is_full_path);
+    
+    // 统一使用子串匹配（LIKE %xxx%），支持：
+    // - 完整路径：D:\xxx\app.exe
+    // - 仅文件名：app.exe
+    // - 模糊子串：app、logs、node 等
+    // 这样输入 "app" 也能匹配 "D:\app.exe"、"D:\myapp.exe"、"D:\xxx\app.exe" 等。
+    let where_clause = format!(
+        "ExecutablePath LIKE '%{0}%' OR ExecutablePath LIKE '%{0}' OR ExecutablePath LIKE '%{0}/%'",
+        escaped_path
+    );
+    log::info!("[search_file_handle] WLIKE 子句: {}", where_clause);
+    
+    let ps_template = String::from(
+        "$query = \"SELECT ProcessId, Name, ExecutablePath FROM Win32_Process WHERE {WHERE}\"; \
+         Get-WmiObject -Query $query | Select-Object @{N='Id';E={$_.ProcessId}}, @{N='ProcessName';E={$_.Name}} | ConvertTo-Json -Compress"
+    );
+    let ps_script = ps_template.replace("{WHERE}", &where_clause);
+    log::debug!("[search_file_handle] PowerShell 脚本: {}", ps_script);
+    
+    let result = Command::new("powershell")
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_script])
+        .creation_flags(0x08000000)
+        .output();
+    
+    match result {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            
+            if !stderr.is_empty() {
+                log::warn!("[search_file_handle] PowerShell stderr: {}", stderr);
+            }
+            log::debug!("[search_file_handle] PowerShell stdout: {}", stdout);
+            
+            if stdout.trim().is_empty() {
+                log::info!("[search_file_handle] 未找到匹配的进程（输入路径: {}）", file_path);
+                return vec![];
+            }
+            
+            parse_powershell_json_output(&stdout, "search_file_handle")
+        }
+        Err(e) => {
+            log::error!("[search_file_handle] 执行PowerShell命令失败: {}", e);
+            vec![]
+        }
+    }
+}
+
+/// 搜索目录占用参数结构体
+#[derive(serde::Deserialize)]
+pub struct SearchDirectoryArgs {
+    pub directoryPath: String,
+}
+
+/// 搜索占用指定目录的进程（匹配进程可执行文件路径中包含该目录的进程）
+#[command]
+pub async fn search_directory_handle(args: SearchDirectoryArgs) -> Vec<serde_json::Value> {
+    let directory_path = args.directoryPath;
+    log::info!("[search_directory_handle] 接收到的目录路径: '{}'", directory_path);
+    
+    if directory_path.trim().is_empty() {
+        log::warn!("[search_directory_handle] 目录路径为空，跳过查询");
+        return vec![];
+    }
+    
+    // 统一路径分隔符为反斜杠，并去掉末尾分隔符
+    let mut normalized = directory_path.replace('/', "\\");
+    while normalized.ends_with('\\') {
+        normalized.pop();
+    }
+    
+    // 转义用于 WMI 字符串：反斜杠加一，单引号双写
+    let escaped_path = normalized.replace('\\', "\\\\").replace("'", "''");
+    log::debug!("[search_directory_handle] 规范化后路径: '{}'", normalized);
+    
+    // 目录匹配策略：使用 LIKE '%xxx%' 子串匹配
+    // - 输入 "logs" → 匹配 "D:\xxx\logs\app.exe"、"D:\logs\app.exe"
+    // - 输入 "target" → 匹配 "D:\app\target\release\app.exe"
+    // - 输入完整路径 "D:\dev\app" → 匹配该路径下的所有进程
+    let where_clause = format!(
+        "ExecutablePath LIKE '%{0}%'",
+        escaped_path
+    );
+    log::info!("[search_directory_handle] WLIKE 子句: {}", where_clause);
+    
+    let ps_template = String::from(
+        "$query = \"SELECT ProcessId, Name, ExecutablePath FROM Win32_Process WHERE {WHERE}\"; \
+         Get-WmiObject -Query $query | Select-Object @{N='Id';E={$_.ProcessId}}, @{N='ProcessName';E={$_.Name}} | ConvertTo-Json -Compress"
+    );
+    let ps_script = ps_template.replace("{WHERE}", &where_clause);
+    log::debug!("[search_directory_handle] PowerShell 脚本: {}", ps_script);
+    
+    let result = Command::new("powershell")
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_script])
+        .creation_flags(0x08000000)
+        .output();
+    
+    match result {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            
+            if !stderr.is_empty() {
+                log::warn!("[search_directory_handle] PowerShell stderr: {}", stderr);
+            }
+            log::debug!("[search_directory_handle] PowerShell stdout: {}", stdout);
+            
+            if stdout.trim().is_empty() {
+                log::info!("[search_directory_handle] 未找到匹配的进程（输入路径: {}）", directory_path);
+                return vec![];
+            }
+            
+            parse_powershell_json_output(&stdout, "search_directory_handle")
+        }
+        Err(e) => {
+            log::error!("[search_directory_handle] 执行PowerShell命令失败: {}", e);
+            vec![]
+        }
+    }
+}
+
+/// 解析 PowerShell 通过 ConvertTo-Json 生成的输出（可能为单个对象或数组）
+fn parse_powershell_json_output(stdout: &str, context: &str) -> Vec<serde_json::Value> {
+    let trimmed = stdout.trim();
+    match serde_json::from_str::<Vec<serde_json::Value>>(trimmed) {
+        Ok(arr) => {
+            log::info!("[{}] 解析为数组，找到 {} 个进程", context, arr.len());
+            arr
+        }
+        Err(_) => {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                log::info!("[{}] 解析为单个对象，找到 1 个进程", context);
+                vec![v]
+            } else {
+                log::error!("[{}] JSON解析失败，原始输出: {}", context, trimmed);
+                vec![]
+            }
+        }
+    }
+}
+
+/// 从配置目录的 Local State 文件中获取 Chromium 加密密钥
 fn get_chromium_key_from_config_dir(config_dir: &PathBuf) -> Result<Vec<u8>, String> {
     let parent_dir = config_dir.parent().ok_or("无法获取配置目录的父目录".to_string())?;
     let local_state_path = parent_dir.join("Local State");
@@ -1357,6 +1928,7 @@ fn get_chromium_key_from_config_dir(config_dir: &PathBuf) -> Result<Vec<u8>, Str
     dpapi_decrypt(key_data)
 }
 
+/// 使用 Chromium 密钥迁移旧版密码文件到新版加密格式
 fn migrate_passwords_file_with_key(old_path: &PathBuf, new_path: &PathBuf, config_dir: &PathBuf) -> Result<(usize, usize), String> {
     let content = fs::read_to_string(old_path).map_err(|e| e.to_string())?;
     let mut data: serde_json::Value =
@@ -1480,6 +2052,7 @@ fn migrate_passwords_file_with_key(old_path: &PathBuf, new_path: &PathBuf, confi
     Ok((total_count, success_count))
 }
 
+/// 将旧版配置目录迁移到新版配置目录
 #[command]
 pub async fn migrate_config_dir(old_dir: String, _full_config: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
     let old_config_dir = PathBuf::from(&old_dir);
@@ -1559,28 +2132,371 @@ pub async fn migrate_config_dir(old_dir: String, _full_config: Option<serde_json
     }))
 }
 
+/// 打开对话框选择图标文件，返回文件路径和 base64 编码的图片数据
 #[command]
 pub async fn select_icon(app: tauri::AppHandle) -> Option<serde_json::Value> {
     let file = app.dialog().file()
         .add_filter("图标文件", &["png", "jpg", "jpeg", "ico", "bmp", "gif"])
         .blocking_pick_file();
-    
+
     match file {
         Some(path) => {
-            Some(serde_json::json!({
-                "path": path.to_string(),
-                "base64": ""
-            }))
+            let path_str = path.to_string();
+            log::info!("select_icon: selected path={}", path_str);
+
+            match std::fs::metadata(&path_str) {
+                Ok(metadata) => {
+                    let size = metadata.len();
+                    log::info!("select_icon: file size={} bytes", size);
+
+                    if size > 2 * 1024 * 1024 {
+                        log::warn!("select_icon: file too large (>2MB), skipping");
+                        return None;
+                    }
+
+                    match std::fs::read(&path_str) {
+                        Ok(bytes) => {
+                            let base64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
+                            log::info!("select_icon: base64 length={}", base64.len());
+
+                            let mime = match path_str.split('.').last() {
+                                Some("png") => "image/png",
+                                Some("jpg") | Some("jpeg") => "image/jpeg",
+                                Some("ico") => "image/x-icon",
+                                Some("bmp") => "image/bmp",
+                                Some("gif") => "image/gif",
+                                _ => "image/png",
+                            };
+                            log::info!("select_icon: mime={}", mime);
+
+                            Some(serde_json::json!({
+                                "path": path_str,
+                                "base64": format!("data:{};base64,{}", mime, base64)
+                            }))
+                        }
+                        Err(e) => {
+                            log::error!("select_icon: failed to read file: {}", e);
+                            None
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::error!("select_icon: failed to get metadata: {}", e);
+                    None
+                }
+            }
         }
-        None => None,
+        None => {
+            log::info!("select_icon: user cancelled");
+            None
+        }
     }
 }
 
+/// 获取指定文件的系统图标，返回 base64 编码的 PNG 图片
 #[command]
-pub async fn get_file_icon(_file_path: String) -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!({ "base64": "" }))
+pub async fn get_file_icon(file_path: String) -> Result<serde_json::Value, String> {
+    log::info!("get_file_icon called with path: {}", file_path);
+    let base64_icon = get_file_icon_internal(&file_path);
+    log::info!("get_file_icon result: {} bytes", base64_icon.len());
+    Ok(serde_json::json!({ "base64": base64_icon }))
 }
 
+/// 内部函数：获取 Windows 系统文件图标（Windows 平台实现）
+#[cfg(windows)]
+fn get_file_icon_internal(file_path: &str) -> String {
+    use std::ptr;
+    use winapi::shared::minwindef::{DWORD, FALSE};
+    use winapi::shared::windef::HICON;
+    use winapi::um::shellapi::{SHGetFileInfoW, SHGFI_ICON, SHGFI_LARGEICON, SHGFI_USEFILEATTRIBUTES, ExtractIconExW};
+    use winapi::um::winuser::{DestroyIcon, DrawIconEx, GetDC, ReleaseDC, GetIconInfo};
+    use winapi::um::wingdi::{CreateCompatibleDC, SelectObject, DeleteDC, DeleteObject, BITMAPINFOHEADER, BI_RGB, CreateDIBSection, GetDIBits, BITMAP};
+
+    const DI_NORMAL: u32 = 0;
+    const WIDTH: i32 = 32;
+    const HEIGHT: i32 = 32;
+
+    log::info!("get_file_icon_internal: path={}", file_path);
+
+    let mut path_wide: Vec<u16> = file_path.encode_utf16().chain(std::iter::once(0)).collect();
+
+    if path_wide.len() > 259 {
+        log::info!("Path too long, using extended path prefix");
+        let extended_path = format!("\\\\?\\{}", file_path);
+        path_wide = extended_path.encode_utf16().chain(std::iter::once(0)).collect();
+    }
+
+    log::info!("Path wide length: {}", path_wide.len());
+
+    let icon_handle: HICON;
+
+    let mut large_icons: [HICON; 1] = [ptr::null_mut()];
+    let mut small_icons: [HICON; 1] = [ptr::null_mut()];
+
+    log::info!("Trying ExtractIconExW...");
+    let extract_result = unsafe {
+        ExtractIconExW(
+            path_wide.as_ptr(),
+            0,
+            large_icons.as_mut_ptr(),
+            small_icons.as_mut_ptr(),
+            1,
+        )
+    };
+
+    log::info!("ExtractIconExW result: {}, large_icon null: {}", extract_result, large_icons[0].is_null());
+
+    if extract_result > 0 && !large_icons[0].is_null() {
+        icon_handle = large_icons[0];
+        log::info!("Using icon from ExtractIconExW");
+    } else {
+        log::info!("ExtractIconExW failed, trying SHGetFileInfoW...");
+        let mut shfi: winapi::um::shellapi::SHFILEINFOW = unsafe { std::mem::zeroed() };
+        let shfi_size = std::mem::size_of::<winapi::um::shellapi::SHFILEINFOW>() as DWORD;
+
+        let mut result = unsafe {
+            SHGetFileInfoW(
+                path_wide.as_ptr(),
+                0,
+                &mut shfi,
+                shfi_size,
+                SHGFI_ICON | SHGFI_LARGEICON,
+            )
+        };
+
+        log::info!("SHGetFileInfoW first attempt result: {}, hIcon null: {}", result, shfi.hIcon.is_null());
+
+        if result == 0 || shfi.hIcon.is_null() {
+            result = unsafe {
+                SHGetFileInfoW(
+                    path_wide.as_ptr(),
+                    0,
+                    &mut shfi,
+                    shfi_size,
+                    SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES,
+                )
+            };
+            log::info!("SHGetFileInfoW second attempt (USEFILEATTRIBUTES) result: {}, hIcon null: {}", result, shfi.hIcon.is_null());
+        }
+
+        if result != 0 && !shfi.hIcon.is_null() {
+            icon_handle = shfi.hIcon;
+            log::info!("Using icon from SHGetFileInfoW");
+        } else {
+            log::error!("Failed to get icon from both ExtractIconExW and SHGetFileInfoW");
+            return String::new();
+        }
+    }
+
+    log::info!("Icon handle: {:?}", icon_handle);
+
+    // 使用 GetIconInfo 获取图标的位图数据
+    let mut icon_info: winapi::um::winuser::ICONINFO = unsafe { std::mem::zeroed() };
+    let gi_result = unsafe { GetIconInfo(icon_handle, &mut icon_info) };
+    if gi_result == FALSE {
+        log::error!("GetIconInfo failed");
+        unsafe { DestroyIcon(icon_handle) };
+        return String::new();
+    }
+
+    let hcolor = icon_info.hbmColor;
+    let hmask = icon_info.hbmMask;
+    log::info!("GetIconInfo: hColor={:?}, hMask={:?}, isIcon={}", hcolor, hmask, icon_info.fIcon);
+
+    // 获取颜色位图信息
+    let mut bmp_color: BITMAP = unsafe { std::mem::zeroed() };
+    let color_obj_result = unsafe { winapi::um::wingdi::GetObjectW(
+        hcolor as *mut _,
+        std::mem::size_of::<BITMAP>() as i32,
+        &mut bmp_color as *mut _ as *mut _
+    ) };
+    log::info!("Color bitmap: {}x{}, bpp={}, planes={}, result={}",
+        bmp_color.bmWidth, bmp_color.bmHeight, bmp_color.bmBitsPixel, bmp_color.bmPlanes, color_obj_result);
+
+    // 获取掩码位图信息
+    let mut bmp_mask: BITMAP = unsafe { std::mem::zeroed() };
+    let mask_obj_result = unsafe { winapi::um::wingdi::GetObjectW(
+        hmask as *mut _,
+        std::mem::size_of::<BITMAP>() as i32,
+        &mut bmp_mask as *mut _ as *mut _
+    ) };
+    log::info!("Mask bitmap: {}x{}, bpp={}, planes={}, result={}",
+        bmp_mask.bmWidth, bmp_mask.bmHeight, bmp_mask.bmBitsPixel, bmp_mask.bmPlanes, mask_obj_result);
+
+    let hdc_screen = unsafe { GetDC(ptr::null_mut()) };
+    let hdc_compat = unsafe { CreateCompatibleDC(hdc_screen) };
+    unsafe { ReleaseDC(ptr::null_mut(), hdc_screen) };
+
+    // 创建 32 位 DIB 用于最终输出
+    let mut bmi: BITMAPINFOHEADER = unsafe { std::mem::zeroed() };
+    bmi.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as DWORD;
+    bmi.biWidth = WIDTH;
+    bmi.biHeight = -HEIGHT;
+    bmi.biPlanes = 1;
+    bmi.biBitCount = 32;
+    bmi.biCompression = BI_RGB;
+
+    let mut bits: Vec<u8> = vec![0u8; (WIDTH * 4 * HEIGHT) as usize];
+
+    // 情况1: 颜色位图是 32 位的，直接读取颜色+alpha
+    if bmp_color.bmBitsPixel == 32 {
+        log::info!("Using 32-bit color bitmap direct read");
+
+        let color_bytes_per_row = ((bmp_color.bmWidth * 4 + 3) / 4) * 4;
+        let mut color_data: Vec<u8> = vec![0u8; (color_bytes_per_row * bmp_color.bmHeight) as usize];
+
+        let mut read_bmi: BITMAPINFOHEADER = unsafe { std::mem::zeroed() };
+        read_bmi.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as DWORD;
+        read_bmi.biWidth = bmp_color.bmWidth;
+        read_bmi.biHeight = bmp_color.bmHeight;
+        read_bmi.biPlanes = 1;
+        read_bmi.biBitCount = 32;
+        read_bmi.biCompression = BI_RGB;
+
+        let old_color = unsafe { SelectObject(hdc_compat, hcolor as *mut _) };
+        let dibits_result = unsafe { GetDIBits(
+            hdc_compat,
+            hcolor,
+            0,
+            bmp_color.bmHeight as u32,
+            color_data.as_mut_ptr() as *mut _,
+            &mut read_bmi as *mut _ as *mut _,
+            0,
+        ) };
+        unsafe { SelectObject(hdc_compat, old_color) };
+        log::info!("GetDIBits(color) result: {}", dibits_result);
+
+        // 复制到 32x32 输出，BAGR -> RGBA
+        let src_w = bmp_color.bmWidth.min(WIDTH) as usize;
+        let src_h = bmp_color.bmHeight.min(HEIGHT) as usize;
+        for y in 0..src_h {
+            for x in 0..src_w {
+                let src_offset = (y as usize) * (color_bytes_per_row as usize) + (x as usize) * 4;
+                let dst_offset = (y as usize) * (WIDTH as usize) * 4 + (x as usize) * 4;
+                let b = color_data[src_offset + 0];
+                let g = color_data[src_offset + 1];
+                let r = color_data[src_offset + 2];
+                let a = color_data[src_offset + 3];
+                bits[dst_offset + 0] = r;
+                bits[dst_offset + 1] = g;
+                bits[dst_offset + 2] = b;
+                bits[dst_offset + 3] = a;
+            }
+        }
+    } else {
+        // 情况2: 使用 DrawIconEx + 洋红色背景法
+        log::info!("Using DrawIconEx with magenta background");
+
+        let mut bits_ptr: *mut winapi::ctypes::c_void = ptr::null_mut();
+        let hbitmap = unsafe {
+            CreateDIBSection(
+                hdc_compat,
+                &mut bmi as *mut _ as *mut _,
+                0,
+                &mut bits_ptr,
+                ptr::null_mut(),
+                0,
+            )
+        };
+
+        if !hbitmap.is_null() && !bits_ptr.is_null() {
+            let old = unsafe { SelectObject(hdc_compat, hbitmap as *mut _) };
+
+            // 填充洋红色背景
+            let slice = unsafe { std::slice::from_raw_parts_mut(bits_ptr as *mut u8, (WIDTH * 4 * HEIGHT) as usize) };
+            for i in 0..(WIDTH * HEIGHT) {
+                let offset = (i * 4) as usize;
+                slice[offset + 0] = 255; // B
+                slice[offset + 1] = 0;   // G
+                slice[offset + 2] = 255; // R
+                slice[offset + 3] = 255; // A
+            }
+
+            let draw_ok = unsafe { DrawIconEx(
+                hdc_compat, 0, 0, icon_handle, WIDTH, HEIGHT, 0, ptr::null_mut(), DI_NORMAL,
+            ) };
+            log::info!("DrawIconEx result: {}", draw_ok);
+
+            // 从位图内存读取到 bits Vec
+            unsafe {
+                std::ptr::copy_nonoverlapping(bits_ptr as *const u8, bits.as_mut_ptr(), (WIDTH * 4 * HEIGHT) as usize);
+            }
+
+            // BGRA -> RGBA，洋红色变透明
+            for i in 0..(WIDTH * HEIGHT) {
+                let offset = (i * 4) as usize;
+                let b = bits[offset + 0];
+                let g = bits[offset + 1];
+                let r = bits[offset + 2];
+                if r == 255 && g == 0 && b == 255 {
+                    bits[offset + 0] = 0;
+                    bits[offset + 1] = 0;
+                    bits[offset + 2] = 0;
+                    bits[offset + 3] = 0;
+                } else {
+                    bits[offset + 0] = r;
+                    bits[offset + 1] = g;
+                    bits[offset + 2] = b;
+                    bits[offset + 3] = 255;
+                }
+            }
+
+            unsafe { SelectObject(hdc_compat, old) };
+            unsafe { DeleteObject(hbitmap as *mut _) };
+        }
+    }
+
+    unsafe { DeleteDC(hdc_compat) };
+    unsafe { DeleteObject(hmask as *mut _) };
+    unsafe { DeleteObject(hcolor as *mut _) };
+    unsafe { DestroyIcon(icon_handle) };
+
+    // 调试：输出像素样本
+    let mut non_transparent = 0;
+    let mut sample_pixels: Vec<String> = Vec::new();
+    for i in 0..(WIDTH * HEIGHT) {
+        let offset = (i * 4) as usize;
+        if bits[offset + 3] > 0 {
+            non_transparent += 1;
+            if sample_pixels.len() < 5 {
+                sample_pixels.push(format!(
+                    "[{}](R={},G={},B={},A={})",
+                    i, bits[offset + 0], bits[offset + 1], bits[offset + 2], bits[offset + 3]
+                ));
+            }
+        }
+    }
+    log::info!("Non-transparent pixels: {}/{}, samples: {:?}", non_transparent, WIDTH * HEIGHT, sample_pixels);
+
+    let png_base64 = encode_bitmap_to_png_base64(&bits, WIDTH, HEIGHT);
+    log::info!("PNG base64 length: {}", png_base64.len());
+
+    png_base64
+}
+
+/// 将位图数据编码为 PNG 格式的 base64 字符串（Windows）
+#[cfg(windows)]
+fn encode_bitmap_to_png_base64(bits: &[u8], width: i32, height: i32) -> String {
+    let mut png_data = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut png_data, width as u32, height as u32);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+
+        if let Ok(mut writer) = encoder.write_header() {
+            let _ = writer.write_image_data(bits);
+        }
+    }
+    base64::engine::general_purpose::STANDARD.encode(&png_data)
+}
+
+/// 内部函数：获取系统文件图标（非 Windows 平台空实现）
+#[cfg(not(windows))]
+fn get_file_icon_internal(_file_path: &str) -> String {
+    String::new()
+}
+
+/// 解析快捷方式文件（当前返回原路径，预留接口）
 #[command]
 pub async fn resolve_shortcut(_lnk_path: String) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({
@@ -1592,8 +2508,10 @@ pub async fn resolve_shortcut(_lnk_path: String) -> Result<serde_json::Value, St
 
 // ============================================================================
 // 全局快捷键命令
+// 提供全局快捷键注册、注销、应用配置读取等功能
 // ============================================================================
 
+/// 同步读取应用配置（用于日志初始化阶段，不依赖 AppHandle）
 pub fn get_app_config_blocking_for_log() -> Result<AppConfig, String> {
     let config_path = get_config_dir().join("app-config.json");
 
@@ -1628,6 +2546,7 @@ pub fn get_app_config_blocking_for_log() -> Result<AppConfig, String> {
     Ok(config)
 }
 
+/// 同步读取应用配置（供快捷键等同步代码使用）
 pub fn get_app_config_blocking(_app: &tauri::AppHandle) -> Result<AppConfig, String> {
     let config_path = get_config_dir().join("app-config.json");
 
@@ -1662,10 +2581,12 @@ pub fn get_app_config_blocking(_app: &tauri::AppHandle) -> Result<AppConfig, Str
     Ok(config)
 }
 
+/// 将快捷键字符串解析为 Tauri Shortcut 对象
 fn shortcut_str_to_tauri(accelerator: &str) -> Option<Shortcut> {
     accelerator.parse::<Shortcut>().ok()
 }
 
+/// 内部函数：注册所有全局快捷键（工具快捷键和窗口快捷键）
 pub fn register_all_shortcuts_internal(app: &tauri::AppHandle) -> Result<(), String> {
     let config = get_app_config_blocking(app)?;
     
@@ -1716,9 +2637,21 @@ pub fn register_all_shortcuts_internal(app: &tauri::AppHandle) -> Result<(), Str
         });
     }
 
+    // 注册 F12 快捷键打开开发者工具
+    if let Some(shortcut) = shortcut_str_to_tauri("F12") {
+        let _ = manager.on_shortcut(shortcut, move |app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.open_devtools();
+                }
+            }
+        });
+    }
+
     Ok(())
 }
 
+/// 注册单个全局快捷键
 #[command]
 pub async fn register_global_shortcut(
     app: tauri::AppHandle,
@@ -1742,6 +2675,7 @@ pub async fn register_global_shortcut(
     }
 }
 
+/// 注销全局快捷键并重新注册所有快捷键
 #[command]
 pub async fn unregister_global_shortcut(
     app: tauri::AppHandle,
@@ -1753,6 +2687,7 @@ pub async fn unregister_global_shortcut(
     Ok(true)
 }
 
+/// 注册应用配置中定义的所有全局快捷键
 #[command]
 pub async fn register_all_shortcuts(app: tauri::AppHandle) -> Result<bool, String> {
     register_all_shortcuts_internal(&app)?;
@@ -1761,8 +2696,27 @@ pub async fn register_all_shortcuts(app: tauri::AppHandle) -> Result<bool, Strin
 
 // ============================================================================
 // 菜单事件处理
+// 提供窗口最小化、应用退出、菜单事件处理等功能
 // ============================================================================
 
+/// 隐藏主窗口（最小化到托盘）
+#[command]
+pub async fn minimize_window(app: tauri::AppHandle) -> Result<bool, String> {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+    Ok(true)
+}
+
+/// 退出应用程序
+#[command]
+pub async fn quit_app(app: tauri::AppHandle) -> Result<bool, String> {
+    *app.state::<AppState>().is_quitting.lock().unwrap() = true;
+    app.exit(0);
+    Ok(true)
+}
+
+/// 处理系统菜单事件（设置、退出等）
 #[command]
 pub async fn handle_menu_event(app: tauri::AppHandle, menu_id: String) -> Result<bool, String> {
     match menu_id.as_str() {
@@ -1771,6 +2725,7 @@ pub async fn handle_menu_event(app: tauri::AppHandle, menu_id: String) -> Result
             Ok(true)
         }
         "quit" => {
+            *app.state::<AppState>().is_quitting.lock().unwrap() = true;
             app.exit(0);
             Ok(true)
         }
@@ -1780,17 +2735,21 @@ pub async fn handle_menu_event(app: tauri::AppHandle, menu_id: String) -> Result
 
 // ============================================================================
 // 旧版 Electron 配置自动迁移
+// 提供从旧版 Electron 应用自动迁移配置和密码的功能
 // ============================================================================
 
+/// 获取旧版 Electron 应用的用户数据目录
 fn get_old_electron_user_data_dir() -> PathBuf {
     let appdata = std::env::var("APPDATA").unwrap_or_else(|_| String::from("."));
     PathBuf::from(appdata).join("toolbox")
 }
 
+/// 获取旧版 Electron 应用的配置目录
 fn get_old_electron_config_dir() -> PathBuf {
     get_old_electron_user_data_dir().join("config")
 }
 
+/// 使用 Windows DPAPI 解密数据
 #[cfg(windows)]
 fn dpapi_decrypt(data: &[u8]) -> Result<Vec<u8>, String> {
     use winapi::um::dpapi::CryptUnprotectData;
@@ -1828,11 +2787,13 @@ fn dpapi_decrypt(data: &[u8]) -> Result<Vec<u8>, String> {
     }
 }
 
+/// 使用 DPAPI 解密数据（非 Windows 平台空实现）
 #[cfg(not(windows))]
 fn dpapi_decrypt(_data: &[u8]) -> Result<Vec<u8>, String> {
     Err("DPAPI 仅在 Windows 上可用".to_string())
 }
 
+/// 从旧版 Electron 的 Local State 文件中获取 Chromium 解密密钥
 fn get_chromium_key() -> Result<Vec<u8>, String> {
     let local_state_path = get_old_electron_user_data_dir().join("Local State");
     if !local_state_path.exists() {
@@ -1866,6 +2827,7 @@ fn get_chromium_key() -> Result<Vec<u8>, String> {
     dpapi_decrypt(key_data)
 }
 
+/// 解密 Chromium v10 格式的加密数据（用于旧版密码迁移）
 fn decrypt_chromium_v10(encrypted_b64: &str, key: &[u8]) -> Result<String, String> {
     let encrypted = base64::engine::general_purpose::STANDARD
         .decode(encrypted_b64)
@@ -1907,12 +2869,14 @@ fn decrypt_chromium_v10(encrypted_b64: &str, key: &[u8]) -> Result<String, Strin
     String::from_utf8(plaintext).map_err(|_| "无效的 UTF-8".to_string())
 }
 
+/// 获取旧版 Electron 便携模式配置目录
 fn get_old_electron_portable_config_dir() -> PathBuf {
     let exe_path = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("."));
     let app_dir = exe_path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| PathBuf::from("."));
     app_dir.join("config")
 }
 
+/// 查找旧版 Electron 配置目录（默认位置或便携位置）
 fn find_old_config_dir() -> Option<PathBuf> {
     let default_dir = get_old_electron_config_dir();
     if default_dir.exists() {
@@ -1927,6 +2891,7 @@ fn find_old_config_dir() -> Option<PathBuf> {
     None
 }
 
+/// 自动检测并迁移旧版 Electron 配置到新版 Tauri 配置目录
 pub fn migrate_old_config() -> Result<(), String> {
     let old_config_dir = match find_old_config_dir() {
         Some(dir) => dir,

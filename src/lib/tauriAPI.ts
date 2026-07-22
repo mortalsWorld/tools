@@ -7,6 +7,7 @@ export interface ProcessInfo {
   memory: string;
   memoryBytes: number;
   cpuUsage: number;
+  ports: number[];
 }
 
 export interface SystemInfo {
@@ -124,6 +125,7 @@ class TauriAPI {
       memory: p.memory,
       memoryBytes: p.memory_bytes,
       cpuUsage: p.cpu_usage,
+      ports: p.ports || [],
     }));
   }
 
@@ -158,12 +160,11 @@ class TauriAPI {
   }
 
   async searchFileHandle(filePath: string): Promise<{ Id: number; ProcessName: string }[]> {
-    return invoke('search_file_handle', { filePath });
+    return invoke('search_file_handle', { args: { filePath } });
   }
 
   async searchDirectoryHandle(directoryPath: string): Promise<{ Id: number; ProcessName: string }[]> {
-    // 在 Tauri 版本中暂时使用相同的命令
-    return invoke('search_file_handle', { filePath: directoryPath });
+    return invoke('search_directory_handle', { args: { directoryPath } });
   }
 
   // 密码管理
@@ -296,6 +297,14 @@ class TauriAPI {
 
   async toggleWindow(): Promise<boolean> {
     return invoke('toggle_window');
+  }
+
+  async minimizeWindow(): Promise<boolean> {
+    return invoke('minimize_window');
+  }
+
+  async quitApp(): Promise<boolean> {
+    return invoke('quit_app');
   }
 
   // 事件监听

@@ -1,29 +1,12 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager};
-use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_global_shortcut::GlobalShortcutExt;
+use chrono::Local;
 
-// 应用状态，存储快捷键管理器和当前配置
-pub struct AppState {
-    pub shortcuts: Mutex<std::collections::HashMap<String, String>>,
-    pub window_shortcut: Mutex<String>,
-    pub close_to_minimize: Mutex<bool>,
-    pub is_quitting: Mutex<bool>,
-}
-
-impl AppState {
-    pub fn new() -> Self {
-        Self {
-            shortcuts: Mutex::new(std::collections::HashMap::new()),
-            window_shortcut: Mutex::new("Ctrl+Shift+H".to_string()),
-            close_to_minimize: Mutex::new(false),
-            is_quitting: Mutex::new(false),
-        }
-    }
-}
+use app_lib::AppState;
 
 fn get_initial_log_level() -> log::LevelFilter {
     match app_lib::commands::get_app_config_blocking_for_log() {
@@ -54,6 +37,16 @@ fn main() {
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(get_initial_log_level())
+                .format(move |out, message, record| {
+                    let now = Local::now();
+                    out.finish(format_args!(
+                        "[{}][{}][{}] {}",
+                        now.format("%Y-%m-%d_%H:%M:%S"),
+                        record.target(),
+                        record.level(),
+                        message
+                    ))
+                })
                 .targets([
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
@@ -82,6 +75,7 @@ fn main() {
             app_lib::commands::kill_process,
             app_lib::commands::kill_processes,
             app_lib::commands::search_file_handle,
+            app_lib::commands::search_directory_handle,
             app_lib::commands::generate_password,
             app_lib::commands::get_passwords,
             app_lib::commands::save_password,
@@ -106,14 +100,38 @@ fn main() {
             app_lib::commands::show_window,
             app_lib::commands::hide_window,
             app_lib::commands::toggle_window,
+            app_lib::commands::minimize_window,
+            app_lib::commands::quit_app,
         ])
         .setup(|app| {
-            // 启动时自动检测并迁移旧版 Electron 配置
-            let _ = app_lib::commands::migrate_old_config();
+            // 先显示窗口，让用户尽快看到界面
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+            }
+
+            // 绑定 F12 快捷键打开开发者工具
+            let manager = app.global_shortcut();
+            if let Ok(shortcut) = "F12".parse::<tauri_plugin_global_shortcut::Shortcut>() {
+                let _ = manager.on_shortcut(shortcut, move |app, _shortcut, event| {
+                    if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.open_devtools();
+                        }
+                    }
+                });
+            }
+
+            // 耗时的初始化延迟到后台执行
+            let app_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                // 启动时自动检测并迁移旧版 Electron 配置
+                let _ = app_lib::commands::migrate_old_config();
+                // 加载配置并注册快捷键
+                let _ = register_shortcuts_from_config_sync(&app_handle);
+            });
+
             // 创建顶部菜单栏
             create_app_menu(app)?;
-            // 加载配置并注册快捷键
-            let _ = register_shortcuts_from_config(app);
             // 监听菜单事件
             app.on_menu_event(|app, event| {
                 match event.id().0.as_str() {
@@ -150,30 +168,7 @@ fn main() {
 
                 if close_to_minimize {
                     api.prevent_close();
-                    
-                    let app_clone = app.clone();
-                    app.dialog()
-                        .message("确定要关闭窗口吗？")
-                        .buttons(tauri_plugin_dialog::MessageDialogButtons::YesNoCancelCustom(
-                            "最小化到托盘".to_string(),
-                            "退出程序".to_string(),
-                            "取消".to_string(),
-                        ))
-                        .show_with_result(move |result| {
-                            match result {
-                                tauri_plugin_dialog::MessageDialogResult::Custom(s) => {
-                                    if s == "最小化到托盘" {
-                                        if let Some(window) = app_clone.get_webview_window("main") {
-                                            let _ = window.hide();
-                                        }
-                                    } else if s == "退出程序" {
-                                        *app_clone.state::<AppState>().is_quitting.lock().unwrap() = true;
-                                        app_clone.exit(0);
-                                    }
-                                }
-                                _ => {}
-                            }
-                        });
+                    let _ = window.emit("close-requested", "");
                 }
             }
         })
@@ -259,11 +254,10 @@ fn create_app_menu(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
-fn register_shortcuts_from_config(app: &mut tauri::App) -> Result<(), String> {
-    let app_handle = app.handle().clone();
-    match app_lib::commands::get_app_config_blocking(&app_handle) {
+fn register_shortcuts_from_config_sync(app_handle: &tauri::AppHandle) -> Result<(), String> {
+    match app_lib::commands::get_app_config_blocking(app_handle) {
         Ok(config) => {
-            let state = app.state::<AppState>();
+            let state = app_handle.state::<AppState>();
             *state.window_shortcut.lock().unwrap() = config.window_shortcut.clone();
             *state.close_to_minimize.lock().unwrap() = config.close_to_minimize;
             if let Some(shortcuts) = config.shortcuts.as_object() {
@@ -275,7 +269,7 @@ fn register_shortcuts_from_config(app: &mut tauri::App) -> Result<(), String> {
                 }
                 *state.shortcuts.lock().unwrap() = map;
             }
-            app_lib::commands::register_all_shortcuts_internal(&app_handle)?;
+            app_lib::commands::register_all_shortcuts_internal(app_handle)?;
             Ok(())
         }
         Err(e) => Err(e),
