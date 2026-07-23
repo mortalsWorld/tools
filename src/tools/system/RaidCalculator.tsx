@@ -26,10 +26,10 @@ interface RaidConfig {
   name: string;
   shortName: string;
   minDisks: number;
+  requiresEven: boolean;
   description: string;
   capacityFormula: (diskSize: number, diskCount: number) => number;
   protectionSize: (diskSize: number, diskCount: number) => number;
-  reservedSize: (diskSize: number, diskCount: number) => number;
   color: string;
 }
 
@@ -38,50 +38,50 @@ const RAID_CONFIGS: Record<string, RaidConfig> = {
     name: 'RAID 0 (条带化)',
     shortName: 'RAID 0',
     minDisks: 2,
+    requiresEven: false,
     description: '数据条带化分布，无冗余，性能最佳',
     capacityFormula: (size, count) => size * count,
     protectionSize: () => 0,
-    reservedSize: () => 0,
     color: '#ff4d4f'
   },
   raid1: {
     name: 'RAID 1 (镜像)',
     shortName: 'RAID 1',
     minDisks: 2,
+    requiresEven: false,
     description: '数据完全镜像，高可靠性',
     capacityFormula: (size) => size,
     protectionSize: (size, count) => size * (count - 1),
-    reservedSize: () => 0,
     color: '#52c41a'
   },
   raid5: {
     name: 'RAID 5 (分布式奇偶校验)',
     shortName: 'RAID 5',
     minDisks: 3,
+    requiresEven: false,
     description: '数据和奇偶校验分布式存储，兼顾容量和容错',
     capacityFormula: (size, count) => size * (count - 1),
     protectionSize: (size) => size,
-    reservedSize: (size) => size * 0.02,
     color: '#1890ff'
   },
   raid6: {
     name: 'RAID 6 (双分布式奇偶校验)',
     shortName: 'RAID 6',
     minDisks: 4,
+    requiresEven: false,
     description: '双重奇偶校验，更高容错能力',
     capacityFormula: (size, count) => size * (count - 2),
     protectionSize: (size) => size * 2,
-    reservedSize: (size) => size * 0.02,
     color: '#722ed1'
   },
   raid10: {
     name: 'RAID 10 (镜像+条带化)',
     shortName: 'RAID 10',
     minDisks: 4,
+    requiresEven: true,
     description: '先镜像后条带化，兼顾性能和容错',
     capacityFormula: (size, count) => size * (count / 2),
     protectionSize: (size, count) => size * (count / 2),
-    reservedSize: () => 0,
     color: '#13c2c2'
   }
 };
@@ -142,11 +142,12 @@ export const RaidCalculator: React.FC = () => {
   const results = useMemo(() => {
     return selectedRaids.map(raidType => {
       const config = RAID_CONFIGS[raidType];
-      const valid = diskCount >= config.minDisks;
+      const meetsMin = diskCount >= config.minDisks;
+      const meetsEven = !config.requiresEven || diskCount % 2 === 0;
+      const valid = meetsMin && meetsEven;
+
       const usable = valid ? config.capacityFormula(sizeInGB, diskCount) : 0;
       const protection = valid ? config.protectionSize(sizeInGB, diskCount) : 0;
-      const reserved = valid ? config.reservedSize(sizeInGB, diskCount) : 0;
-      const unused = valid ? rawTotal - usable - protection - reserved : 0;
       const usablePercent = rawTotal > 0 ? ((usable / rawTotal) * 100).toFixed(1) : '0';
 
       return {
@@ -155,13 +156,14 @@ export const RaidCalculator: React.FC = () => {
         name: config.name,
         shortName: config.shortName,
         valid,
+        meetsMin,
+        meetsEven,
         usable,
         protection,
-        reserved,
-        unused,
         rawTotal,
         usablePercent,
         minDisks: config.minDisks,
+        requiresEven: config.requiresEven,
         color: config.color
       };
     });
@@ -320,7 +322,7 @@ export const RaidCalculator: React.FC = () => {
             <span style={{ color: '#666' }}>硬盘总数:</span>
             <Tag color="blue">{diskCount}</Tag>
             <span style={{ color: '#666' }}>原始总容量:</span>
-            <Tag color="green">{formatSizeBinary(rawTotal * 1024 * 1024 * 1024)}</Tag>
+            <Tag color="green">{formatSizeBinary(rawTotal)}</Tag>
           </Space>
         </div>
       </Card>
@@ -356,7 +358,7 @@ export const RaidCalculator: React.FC = () => {
                 <Space>
                   <span style={{ color: config.color, fontWeight: 600 }}>{config.shortName}</span>
                   <span style={{ color: '#999' }}>- {config.description}</span>
-                  <Tag>最少 {config.minDisks} 块</Tag>
+                  <Tag>最少 {config.minDisks} 块{config.requiresEven ? '（偶数）' : ''}</Tag>
                 </Space>
               </Select.Option>
             ))}
@@ -384,14 +386,17 @@ export const RaidCalculator: React.FC = () => {
                       label: config.shortName
                     }))}
                   />
-                  {!result.valid && (
+                  {!result.meetsMin && (
                     <Tag color="red">需 ≥{result.minDisks} 块硬盘</Tag>
+                  )}
+                  {result.meetsMin && !result.meetsEven && (
+                    <Tag color="red">需偶数块硬盘</Tag>
                   )}
                 </Space>
                 {result.valid && (
                   <Space>
                     <span style={{ fontSize: '13px', color: '#666' }}>
-                      可用: <strong style={{ color: '#52c41a' }}>{formatSizeBinary(result.usable * 1024 * 1024 * 1024)}</strong>
+                      可用: <strong style={{ color: '#52c41a' }}>{formatSizeBinary(result.usable)}</strong>
                     </span>
                     <span style={{ fontSize: '13px', color: '#666' }}>
                       利用率: <strong>{result.usablePercent}%</strong>
@@ -402,28 +407,8 @@ export const RaidCalculator: React.FC = () => {
 
               {result.valid ? (
                 <div style={{ display: 'flex', height: '40px', borderRadius: '6px', overflow: 'hidden', background: '#f0f0f0' }}>
-                  {/* 系统保留 */}
-                  {result.reserved > 0 && (
-                    <Tooltip title={`系统保留: ${formatSizeBinary(result.reserved * 1024 * 1024 * 1024)}`}>
-                      <div
-                        style={{
-                          width: `${(result.reserved / result.rawTotal) * 100}%`,
-                          background: '#faad14',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#fff',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          minWidth: result.reserved / result.rawTotal > 0.02 ? undefined : '4px'
-                        }}
-                      >
-                        {result.reserved / result.rawTotal > 0.05 && formatSizeBinary(result.reserved * 1024 * 1024 * 1024)}
-                      </div>
-                    </Tooltip>
-                  )}
                   {/* 可用容量 */}
-                  <Tooltip title={`可用容量: ${formatSizeBinary(result.usable * 1024 * 1024 * 1024)}`}>
+                  <Tooltip title={`可用容量: ${formatSizeBinary(result.usable)}`}>
                     <div
                       style={{
                         width: `${(result.usable / result.rawTotal) * 100}%`,
@@ -437,12 +422,12 @@ export const RaidCalculator: React.FC = () => {
                         minWidth: result.usable / result.rawTotal > 0.02 ? undefined : '4px'
                       }}
                     >
-                      {result.usable / result.rawTotal > 0.08 && formatSizeBinary(result.usable * 1024 * 1024 * 1024)}
+                      {result.usable / result.rawTotal > 0.08 && formatSizeBinary(result.usable)}
                     </div>
                   </Tooltip>
                   {/* 保护/冗余 */}
                   {result.protection > 0 && (
-                    <Tooltip title={`保护/冗余: ${formatSizeBinary(result.protection * 1024 * 1024 * 1024)}`}>
+                    <Tooltip title={`保护/冗余: ${formatSizeBinary(result.protection)}`}>
                       <div
                         style={{
                           width: `${(result.protection / result.rawTotal) * 100}%`,
@@ -456,34 +441,16 @@ export const RaidCalculator: React.FC = () => {
                           minWidth: result.protection / result.rawTotal > 0.02 ? undefined : '4px'
                         }}
                       >
-                        {result.protection / result.rawTotal > 0.05 && formatSizeBinary(result.protection * 1024 * 1024 * 1024)}
-                      </div>
-                    </Tooltip>
-                  )}
-                  {/* 未使用 */}
-                  {result.unused > 0 && (
-                    <Tooltip title={`未使用: ${formatSizeBinary(result.unused * 1024 * 1024 * 1024)}`}>
-                      <div
-                        style={{
-                          width: `${(result.unused / result.rawTotal) * 100}%`,
-                          background: '#d9d9d9',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#666',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          minWidth: result.unused / result.rawTotal > 0.02 ? undefined : '4px'
-                        }}
-                      >
-                        {result.unused / result.rawTotal > 0.05 && formatSizeBinary(result.unused * 1024 * 1024 * 1024)}
+                        {result.protection / result.rawTotal > 0.05 && formatSizeBinary(result.protection)}
                       </div>
                     </Tooltip>
                   )}
                 </div>
               ) : (
                 <div style={{ height: '40px', borderRadius: '6px', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
-                  硬盘数量不足，无法构建 {result.shortName}
+                  {!result.meetsMin
+                    ? `硬盘数量不足，${result.shortName} 最少需要 ${result.minDisks} 块硬盘`
+                    : `${result.shortName} 需要偶数块硬盘（当前 ${diskCount} 块）`}
                 </div>
               )}
             </div>
@@ -493,20 +460,12 @@ export const RaidCalculator: React.FC = () => {
         {/* 图例 */}
         <div style={{ marginTop: '24px', padding: '12px 16px', background: '#f6ffed', borderRadius: '6px', display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
           <Space>
-            <div style={{ width: '16px', height: '16px', background: '#faad14', borderRadius: '3px' }} />
-            <span style={{ fontSize: '13px' }}>系统保留容量</span>
-          </Space>
-          <Space>
             <div style={{ width: '16px', height: '16px', background: '#52c41a', borderRadius: '3px' }} />
             <span style={{ fontSize: '13px' }}>可用容量</span>
           </Space>
           <Space>
             <div style={{ width: '16px', height: '16px', background: '#1890ff', borderRadius: '3px' }} />
             <span style={{ fontSize: '13px' }}>保护/冗余</span>
-          </Space>
-          <Space>
-            <div style={{ width: '16px', height: '16px', background: '#d9d9d9', borderRadius: '3px' }} />
-            <span style={{ fontSize: '13px' }}>未使用</span>
           </Space>
         </div>
 
@@ -517,7 +476,7 @@ export const RaidCalculator: React.FC = () => {
               <li>实际可用容量会因磁盘厂商的十进制换算（1TB=1000GB）与操作系统的二进制换算（1TB=1024GB）而略有差异</li>
               <li>RAID 不是备份方案，仍需定期备份重要数据</li>
               <li>重建大容量磁盘时耗时较长，期间存在二次故障风险</li>
-              <li>部分 RAID 级别会有少量系统保留空间用于元数据存储</li>
+              <li>RAID 10 需要偶数块硬盘（至少 4 块）</li>
             </ul>
           }
           type="warning"
@@ -536,7 +495,7 @@ export const RaidCalculator: React.FC = () => {
                 <div style={{ fontWeight: 600, marginBottom: '4px' }}>{config.name}</div>
                 <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>{config.description}</div>
                 <Space>
-                  <Tag color="default" style={{ fontSize: '12px' }}>最少 {config.minDisks} 块</Tag>
+                  <Tag color="default" style={{ fontSize: '12px' }}>最少 {config.minDisks} 块{config.requiresEven ? '（偶数）' : ''}</Tag>
                 </Space>
               </Card>
             </Col>
