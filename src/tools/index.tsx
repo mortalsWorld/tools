@@ -14,7 +14,8 @@ import {
   SafetyCertificateOutlined,
   SettingOutlined,
   CalculatorOutlined,
-  SendOutlined
+  SendOutlined,
+  HddOutlined
 } from '@ant-design/icons'
 
 const lazyNamed = <T extends { [key: string]: React.ComponentType<any> }, K extends keyof T>(
@@ -35,6 +36,7 @@ const SubnetConverterTool = lazyNamed(() => import('./network/SubnetConverterToo
 const IPLookupTool = lazyNamed(() => import('./network/IPLookupTool'), 'IPLookupTool');
 const HttpTestTool = lazyNamed(() => import('./network/HttpTestTool'), 'HttpTestTool');
 const ProcessTool = lazyNamed(() => import('./system/ProcessTool'), 'ProcessTool');
+const RaidCalculator = lazyNamed(() => import('./system/RaidCalculator'), 'RaidCalculator');
 const PasswordTool = lazyNamed(() => import('./security/PasswordTool'), 'PasswordTool');
 const SettingsTool = lazyNamed(() => import('./settings/SettingsTool'), 'SettingsTool');
 
@@ -223,6 +225,15 @@ export const initializeTools = () => {
     category: 'system',
     icon: <AppstoreOutlined />,
     component: ProcessTool
+  })
+
+  toolRegistry.registerTool({
+    id: 'raid-calculator',
+    name: 'RAID计算器',
+    description: 'RAID磁盘阵列容量计算与对比工具',
+    category: 'system',
+    icon: <HddOutlined />,
+    component: RaidCalculator
   })
 
   toolRegistry.registerTool({
