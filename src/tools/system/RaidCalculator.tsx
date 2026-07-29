@@ -1,25 +1,19 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Card,
   InputNumber,
-  Select,
   Space,
   Tag,
   Row,
   Col,
-  Alert,
   Tooltip,
   Button,
-  Tabs
+  Select
 } from 'antd';
 import {
-  HddOutlined,
-  InfoCircleOutlined,
-  WarningOutlined,
   PlusOutlined,
   MinusOutlined,
   CloseOutlined,
-  DatabaseOutlined
+  DeleteOutlined
 } from '@ant-design/icons';
 
 interface RaidConfig {
@@ -128,30 +122,43 @@ function formatSizeBinary(gb: number): string {
   return gb.toFixed(0) + ' GB';
 }
 
+interface DiskGroup {
+  id: number;
+  size: number;
+  count: number;
+}
+
 export const RaidCalculator: React.FC = () => {
   const [diskType, setDiskType] = useState<'hdd' | 'ssd'>('hdd');
-  const [diskSize, setDiskSize] = useState<number>(1000);
-  const [diskCount, setDiskCount] = useState<number>(4);
-  const [selectedRaids, setSelectedRaids] = useState<string[]>(['raid5', 'raid6', 'raid10']);
+  const [diskGroups, setDiskGroups] = useState<DiskGroup[]>([
+    { id: 1, size: 1000, count: 4 }
+  ]);
+  const [nextId, setNextId] = useState(2);
+  const [comparisonRows, setComparisonRows] = useState<string[]>(['raid5', 'raid6', 'raid10']);
 
   const presets = diskType === 'hdd' ? HDD_PRESETS : SSD_PRESETS;
 
-  const sizeInGB = diskSize;
-  const rawTotal = sizeInGB * diskCount;
+  // 混合硬盘计算逻辑（参考群晖）
+  const totalDisks = diskGroups.reduce((sum, g) => sum + g.count, 0);
+  const rawTotal = diskGroups.reduce((sum, g) => sum + g.size * g.count, 0);
+  const minSize = diskGroups.length > 0 ? Math.min(...diskGroups.map(g => g.size)) : 0;
+  const sizeAfterReserve = Math.max(0, minSize - 10);
+  const reserved = totalDisks * 10;
 
   const results = useMemo(() => {
-    return selectedRaids.map(raidType => {
+    return comparisonRows.map((raidType, index) => {
       const config = RAID_CONFIGS[raidType];
-      const meetsMin = diskCount >= config.minDisks;
-      const meetsEven = !config.requiresEven || diskCount % 2 === 0;
+      const meetsMin = totalDisks >= config.minDisks;
+      const meetsEven = !config.requiresEven || totalDisks % 2 === 0;
       const valid = meetsMin && meetsEven;
 
-      const usable = valid ? config.capacityFormula(sizeInGB, diskCount) : 0;
-      const protection = valid ? config.protectionSize(sizeInGB, diskCount) : 0;
+      const usable = valid ? config.capacityFormula(sizeAfterReserve, totalDisks) : 0;
+      const protection = valid ? config.protectionSize(sizeAfterReserve, totalDisks) : 0;
+      const unused = valid ? Math.max(0, rawTotal - reserved - usable - protection) : 0;
       const usablePercent = rawTotal > 0 ? ((usable / rawTotal) * 100).toFixed(1) : '0';
 
       return {
-        key: raidType,
+        index,
         raidType,
         name: config.name,
         shortName: config.shortName,
@@ -160,6 +167,8 @@ export const RaidCalculator: React.FC = () => {
         meetsEven,
         usable,
         protection,
+        reserved,
+        unused,
         rawTotal,
         usablePercent,
         minDisks: config.minDisks,
@@ -167,56 +176,122 @@ export const RaidCalculator: React.FC = () => {
         color: config.color
       };
     });
-  }, [selectedRaids, diskCount, sizeInGB, rawTotal]);
+  }, [comparisonRows, totalDisks, sizeAfterReserve, rawTotal, reserved]);
+
+  const addDiskGroup = () => {
+    setDiskGroups([...diskGroups, { id: nextId, size: 1000, count: 1 }]);
+    setNextId(nextId + 1);
+  };
+
+  const removeDiskGroup = (id: number) => {
+    if (diskGroups.length <= 1) return;
+    setDiskGroups(diskGroups.filter(g => g.id !== id));
+  };
+
+  const updateDiskGroup = (id: number, updates: Partial<DiskGroup>) => {
+    setDiskGroups(diskGroups.map(g => g.id === id ? { ...g, ...updates } : g));
+  };
+
+  const addRow = () => {
+    const allKeys = Object.keys(RAID_CONFIGS);
+    const unused = allKeys.find(k => !comparisonRows.includes(k));
+    if (unused) {
+      setComparisonRows([...comparisonRows, unused]);
+    } else if (comparisonRows.length < allKeys.length + 2) {
+      setComparisonRows([...comparisonRows, 'raid5']);
+    }
+  };
+
+  const removeRow = (idx: number) => {
+    if (comparisonRows.length <= 1) return;
+    const newRows = [...comparisonRows];
+    newRows.splice(idx, 1);
+    setComparisonRows(newRows);
+  };
+
+  const changeRow = (idx: number, value: string) => {
+    const newRows = [...comparisonRows];
+    newRows[idx] = value;
+    setComparisonRows(newRows);
+  };
 
   return (
     <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
       {/* 步骤1：选择硬盘 */}
-      <Card
-        title={
-          <Space>
-            <Tag color="default" style={{ fontSize: '14px', padding: '2px 8px' }}>步骤 1</Tag>
-            <span style={{ fontSize: '18px', fontWeight: 600 }}>选择硬盘</span>
-          </Space>
-        }
-        style={{ marginBottom: '24px' }}
-      >
-        <Tabs
-          activeKey={diskType}
-          onChange={(key) => setDiskType(key as 'hdd' | 'ssd')}
-          items={[
-            {
-              key: 'hdd',
-              label: (
-                <Space>
-                  <HddOutlined />
-                  <span>HDD</span>
-                </Space>
-              )
-            },
-            {
-              key: 'ssd',
-              label: (
-                <Space>
-                  <DatabaseOutlined />
-                  <span>SSD</span>
-                </Space>
-              )
-            }
-          ]}
-        />
+      <div style={{ marginBottom: '32px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+          <span style={{
+            background: '#374151',
+            color: '#fff',
+            fontSize: '13px',
+            fontWeight: 600,
+            padding: '4px 10px',
+            borderRadius: '4px',
+            marginRight: '12px'
+          }}>步骤 1</span>
+          <span style={{ fontSize: '22px', fontWeight: 700, color: '#1f2937' }}>选择硬盘</span>
+        </div>
+
+        {/* HDD / SSD 标签页 */}
+        <div style={{ borderBottom: '1px solid #e5e7eb', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <button
+              onClick={() => setDiskType('hdd')}
+              style={{
+                padding: '8px 20px',
+                fontSize: '15px',
+                fontWeight: 600,
+                border: 'none',
+                borderBottom: diskType === 'hdd' ? '2px solid #2563eb' : '2px solid transparent',
+                background: 'transparent',
+                color: diskType === 'hdd' ? '#2563eb' : '#6b7280',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              HDD
+            </button>
+            <button
+              onClick={() => setDiskType('ssd')}
+              style={{
+                padding: '8px 20px',
+                fontSize: '15px',
+                fontWeight: 600,
+                border: 'none',
+                borderBottom: diskType === 'ssd' ? '2px solid #2563eb' : '2px solid transparent',
+                background: 'transparent',
+                color: diskType === 'ssd' ? '#2563eb' : '#6b7280',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              SSD
+            </button>
+          </div>
+        </div>
 
         {/* 预设容量选择 */}
-        <div style={{ marginBottom: '16px' }}>
-          <div style={{ marginBottom: '8px', color: '#666', fontSize: '13px' }}>快速选择容量</div>
-          <Row gutter={[8, 8]}>
+        <div style={{ marginBottom: '20px' }}>
+          <Row gutter={[12, 12]}>
             {presets.map((preset) => (
               <Col key={preset.value}>
                 <Button
-                  type={diskSize === preset.value ? 'primary' : 'default'}
-                  size="small"
-                  onClick={() => setDiskSize(preset.value)}
-                  style={{ minWidth: '80px' }}
+                  size="large"
+                  onClick={() => {
+                    // 点击预设：如果只有一组且是默认状态，替换；否则新增一组
+                    if (diskGroups.length === 1 && diskGroups[0].size === 1000 && diskGroups[0].count === 4) {
+                      setDiskGroups([{ ...diskGroups[0], size: preset.value }]);
+                    } else {
+                      setDiskGroups([...diskGroups, { id: nextId, size: preset.value, count: 1 }]);
+                      setNextId(nextId + 1);
+                    }
+                  }}
+                  style={{
+                    minWidth: '100px',
+                    height: '44px',
+                    fontSize: '14px',
+                    fontWeight: 500
+                  }}
                 >
                   {preset.label}
                 </Button>
@@ -225,48 +300,60 @@ export const RaidCalculator: React.FC = () => {
           </Row>
         </div>
 
-        {/* 自定义容量和数量 */}
-        <Row gutter={24} style={{ marginBottom: '16px' }}>
-          <Col>
-            <div style={{ marginBottom: '8px', color: '#666', fontSize: '13px' }}>单盘容量 (GB)</div>
-            <InputNumber
-              min={1}
-              max={100000}
-              value={diskSize}
-              onChange={(v) => setDiskSize(v || 1)}
-              style={{ width: '150px' }}
-              addonAfter="GB"
-            />
-          </Col>
-          <Col>
-            <div style={{ marginBottom: '8px', color: '#666', fontSize: '13px' }}>磁盘数量</div>
-            <Space>
-              <Button
-                icon={<MinusOutlined />}
-                onClick={() => setDiskCount(Math.max(1, diskCount - 1))}
-                disabled={diskCount <= 1}
-              />
-              <InputNumber
-                min={1}
-                max={64}
-                value={diskCount}
-                onChange={(v) => setDiskCount(v || 1)}
-                style={{ width: '80px', textAlign: 'center' }}
-                controls={false}
-              />
-              <Button
-                icon={<PlusOutlined />}
-                onClick={() => setDiskCount(Math.min(64, diskCount + 1))}
-                disabled={diskCount >= 64}
-              />
-            </Space>
-          </Col>
-          <Col style={{ display: 'flex', alignItems: 'flex-end' }}>
-            <Button icon={<CloseOutlined />} onClick={() => { setDiskCount(4); setDiskSize(1000); }}>
-              重置
-            </Button>
-          </Col>
-        </Row>
+        {/* 硬盘组列表 */}
+        <div style={{ marginBottom: '16px' }}>
+          {diskGroups.map((group) => (
+            <Row key={group.id} gutter={16} style={{ marginBottom: '12px', alignItems: 'center' }}>
+              <Col>
+                <div style={{ marginBottom: '4px', color: '#666', fontSize: '13px' }}>单盘容量 (GB)</div>
+                <InputNumber
+                  min={1}
+                  max={100000}
+                  value={group.size}
+                  onChange={(v) => updateDiskGroup(group.id, { size: v || 1 })}
+                  style={{ width: '140px' }}
+                  addonAfter="GB"
+                />
+              </Col>
+              <Col>
+                <div style={{ marginBottom: '4px', color: '#666', fontSize: '13px' }}>数量</div>
+                <Space>
+                  <Button
+                    icon={<MinusOutlined />}
+                    onClick={() => updateDiskGroup(group.id, { count: Math.max(1, group.count - 1) })}
+                    disabled={group.count <= 1}
+                  />
+                  <InputNumber
+                    min={1}
+                    max={64}
+                    value={group.count}
+                    onChange={(v) => updateDiskGroup(group.id, { count: v || 1 })}
+                    style={{ width: '70px', textAlign: 'center' }}
+                    controls={false}
+                  />
+                  <Button
+                    icon={<PlusOutlined />}
+                    onClick={() => updateDiskGroup(group.id, { count: Math.min(64, group.count + 1) })}
+                    disabled={group.count >= 64}
+                  />
+                </Space>
+              </Col>
+              <Col style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <Button
+                  icon={<DeleteOutlined />}
+                  danger
+                  onClick={() => removeDiskGroup(group.id)}
+                  disabled={diskGroups.length <= 1}
+                >
+                  删除
+                </Button>
+              </Col>
+            </Row>
+          ))}
+          <Button icon={<PlusOutlined />} onClick={addDiskGroup} style={{ marginTop: '8px' }}>
+            添加不同容量硬盘
+          </Button>
+        </div>
 
         {/* 硬盘槽位可视化 */}
         <div
@@ -281,106 +368,79 @@ export const RaidCalculator: React.FC = () => {
             alignItems: 'center'
           }}
         >
-          {Array.from({ length: Math.max(diskCount, 12) }).map((_, i) => (
-            <div
-              key={i}
-              style={{
-                width: '72px',
-                height: '90px',
-                borderRadius: '4px',
-                border: i < diskCount ? 'none' : '2px dashed #4b5563',
-                background: i < diskCount
-                  ? diskType === 'ssd' ? '#374151' : '#4b5563'
-                  : 'transparent',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: i < diskCount ? '#fff' : '#6b7280',
-                fontSize: i < diskCount ? '13px' : '12px',
-                transition: 'all 0.2s'
-              }}
-            >
-              {i < diskCount ? (
-                <>
-                  <div style={{ fontWeight: 600, marginBottom: '4px' }}>
-                    {formatSize(diskSize)}
-                  </div>
-                  <div style={{ fontSize: '11px', opacity: 0.7 }}>
-                    {diskType.toUpperCase()}
-                  </div>
-                </>
-              ) : (
-                <span style={{ fontSize: '18px' }}>+</span>
-              )}
-            </div>
-          ))}
+          {diskGroups.flatMap((group) =>
+            Array.from({ length: group.count }).map((_, i) => (
+              <div
+                key={`${group.id}-${i}`}
+                style={{
+                  width: '72px',
+                  height: '50px',
+                  borderRadius: '4px',
+                  background: diskType === 'ssd' ? '#374151' : '#4b5563',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  fontSize: '12px',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <div style={{ fontWeight: 600 }}>{formatSize(group.size)}</div>
+                <div style={{ fontSize: '10px', opacity: 0.7 }}>{diskType.toUpperCase()}</div>
+              </div>
+            ))
+          )}
         </div>
 
         <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Space>
             <span style={{ color: '#666' }}>硬盘总数:</span>
-            <Tag color="blue">{diskCount}</Tag>
+            <Tag color="blue">{totalDisks}</Tag>
             <span style={{ color: '#666' }}>原始总容量:</span>
             <Tag color="green">{formatSizeBinary(rawTotal)}</Tag>
+            {diskGroups.length > 1 && (
+              <>
+                <span style={{ color: '#666' }}>最小盘容量:</span>
+                <Tag color="orange">{formatSizeBinary(minSize)}</Tag>
+              </>
+            )}
           </Space>
+          <Button
+            icon={<CloseOutlined />}
+            onClick={() => { setDiskGroups([{ id: 1, size: 1000, count: 4 }]); setNextId(2); }}
+          >
+            重置
+          </Button>
         </div>
-      </Card>
+      </div>
 
       {/* 步骤2：预计使用情况 */}
-      <Card
-        title={
-          <Space>
-            <Tag color="default" style={{ fontSize: '14px', padding: '2px 8px' }}>步骤 2</Tag>
-            <span style={{ fontSize: '18px', fontWeight: 600 }}>预计使用情况</span>
-          </Space>
-        }
-      >
-        <Alert
-          message="选择 RAID 级别查看容量分配情况"
-          type="info"
-          showIcon
-          icon={<InfoCircleOutlined />}
-          style={{ marginBottom: '16px' }}
-        />
-
-        {/* RAID 选择 */}
-        <div style={{ marginBottom: '24px' }}>
-          <Select
-            mode="multiple"
-            value={selectedRaids}
-            onChange={setSelectedRaids}
-            style={{ width: '100%' }}
-            placeholder="选择要对比的 RAID 级别"
-          >
-            {Object.entries(RAID_CONFIGS).map(([key, config]) => (
-              <Select.Option key={key} value={key}>
-                <Space>
-                  <span style={{ color: config.color, fontWeight: 600 }}>{config.shortName}</span>
-                  <span style={{ color: '#999' }}>- {config.description}</span>
-                  <Tag>最少 {config.minDisks} 块{config.requiresEven ? '（偶数）' : ''}</Tag>
-                </Space>
-              </Select.Option>
-            ))}
-          </Select>
+      <div style={{ background: '#f5f5f5', borderRadius: '8px', padding: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+          <span style={{
+            background: '#374151',
+            color: '#fff',
+            fontSize: '13px',
+            fontWeight: 600,
+            padding: '4px 10px',
+            borderRadius: '4px',
+            marginRight: '12px'
+          }}>步骤 2</span>
+          <span style={{ fontSize: '22px', fontWeight: 700, color: '#1f2937' }}>预计使用情况</span>
         </div>
 
-        {/* RAID 容量分布可视化 */}
+        {/* RAID 对比行 */}
         <Space direction="vertical" style={{ width: '100%' }} size="large">
           {results.map((result) => (
-            <div key={result.key}>
+            <div key={result.index}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <Space>
                   <Select
                     value={result.raidType}
-                    style={{ width: '140px' }}
+                    style={{ width: '160px' }}
                     size="small"
-                    onChange={(value) => {
-                      const newRaids = [...selectedRaids];
-                      const idx = newRaids.indexOf(result.raidType);
-                      if (idx >= 0) newRaids[idx] = value;
-                      setSelectedRaids(newRaids);
-                    }}
+                    onChange={(value) => changeRow(result.index, value)}
                     options={Object.entries(RAID_CONFIGS).map(([key, config]) => ({
                       value: key,
                       label: config.shortName
@@ -393,26 +453,54 @@ export const RaidCalculator: React.FC = () => {
                     <Tag color="red">需偶数块硬盘</Tag>
                   )}
                 </Space>
-                {result.valid && (
-                  <Space>
-                    <span style={{ fontSize: '13px', color: '#666' }}>
-                      可用: <strong style={{ color: '#52c41a' }}>{formatSizeBinary(result.usable)}</strong>
-                    </span>
-                    <span style={{ fontSize: '13px', color: '#666' }}>
-                      利用率: <strong>{result.usablePercent}%</strong>
-                    </span>
-                  </Space>
-                )}
+                <Space>
+                  {result.valid && (
+                    <>
+                      <span style={{ fontSize: '13px', color: '#666' }}>
+                        可用: <strong style={{ color: '#52c4c4' }}>{formatSizeBinary(result.usable)}</strong>
+                      </span>
+                      <span style={{ fontSize: '13px', color: '#666' }}>
+                        利用率: <strong>{result.usablePercent}%</strong>
+                      </span>
+                    </>
+                  )}
+                  <Button
+                    icon={<CloseOutlined />}
+                    size="small"
+                    onClick={() => removeRow(result.index)}
+                    disabled={comparisonRows.length <= 1}
+                  />
+                </Space>
               </div>
 
               {result.valid ? (
-                <div style={{ display: 'flex', height: '40px', borderRadius: '6px', overflow: 'hidden', background: '#f0f0f0' }}>
+                <div style={{ display: 'flex', height: '40px', borderRadius: '6px', overflow: 'hidden', background: '#e5e7eb' }}>
+                  {/* 系统保留 */}
+                  {result.reserved > 0 && (
+                    <Tooltip title={`系统保留: ${formatSizeBinary(result.reserved)}`}>
+                      <div
+                        style={{
+                          width: `${(result.reserved / result.rawTotal) * 100}%`,
+                          background: '#fa8c16',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#fff',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          minWidth: result.reserved / result.rawTotal > 0.02 ? undefined : '4px'
+                        }}
+                      >
+                        {result.reserved / result.rawTotal > 0.05 && formatSizeBinary(result.reserved)}
+                      </div>
+                    </Tooltip>
+                  )}
                   {/* 可用容量 */}
                   <Tooltip title={`可用容量: ${formatSizeBinary(result.usable)}`}>
                     <div
                       style={{
                         width: `${(result.usable / result.rawTotal) * 100}%`,
-                        background: '#52c41a',
+                        background: '#52c4c4',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -431,7 +519,7 @@ export const RaidCalculator: React.FC = () => {
                       <div
                         style={{
                           width: `${(result.protection / result.rawTotal) * 100}%`,
-                          background: '#1890ff',
+                          background: '#2b6cb0',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -445,63 +533,66 @@ export const RaidCalculator: React.FC = () => {
                       </div>
                     </Tooltip>
                   )}
+                  {/* 未使用 */}
+                  {result.unused > 0 && (
+                    <Tooltip title={`未使用: ${formatSizeBinary(result.unused)}`}>
+                      <div
+                        style={{
+                          width: `${(result.unused / result.rawTotal) * 100}%`,
+                          background: '#a0aec0',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#fff',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          minWidth: result.unused / result.rawTotal > 0.02 ? undefined : '4px'
+                        }}
+                      >
+                        {result.unused / result.rawTotal > 0.05 && formatSizeBinary(result.unused)}
+                      </div>
+                    </Tooltip>
+                  )}
                 </div>
               ) : (
-                <div style={{ height: '40px', borderRadius: '6px', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
+                <div style={{ height: '40px', borderRadius: '6px', background: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
                   {!result.meetsMin
                     ? `硬盘数量不足，${result.shortName} 最少需要 ${result.minDisks} 块硬盘`
-                    : `${result.shortName} 需要偶数块硬盘（当前 ${diskCount} 块）`}
+                    : `${result.shortName} 需要偶数块硬盘（当前 ${totalDisks} 块）`}
                 </div>
               )}
             </div>
           ))}
         </Space>
 
+        <Button icon={<PlusOutlined />} onClick={addRow} style={{ marginTop: '16px' }}>
+          添加对比
+        </Button>
+
         {/* 图例 */}
-        <div style={{ marginTop: '24px', padding: '12px 16px', background: '#f6ffed', borderRadius: '6px', display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+        <div style={{ marginTop: '20px', padding: '12px 16px', background: '#fff', borderRadius: '6px', display: 'flex', gap: '24px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <Space>
-            <div style={{ width: '16px', height: '16px', background: '#52c41a', borderRadius: '3px' }} />
+            <div style={{ width: '16px', height: '16px', background: '#fa8c16', borderRadius: '3px' }} />
+            <span style={{ fontSize: '13px' }}>系统保留容量</span>
+          </Space>
+          <Space>
+            <div style={{ width: '16px', height: '16px', background: '#52c4c4', borderRadius: '3px' }} />
             <span style={{ fontSize: '13px' }}>可用容量</span>
           </Space>
           <Space>
-            <div style={{ width: '16px', height: '16px', background: '#1890ff', borderRadius: '3px' }} />
-            <span style={{ fontSize: '13px' }}>保护/冗余</span>
+            <div style={{ width: '16px', height: '16px', background: '#2b6cb0', borderRadius: '3px' }} />
+            <span style={{ fontSize: '13px' }}>保护</span>
+          </Space>
+          <Space>
+            <div style={{ width: '16px', height: '16px', background: '#a0aec0', borderRadius: '3px' }} />
+            <span style={{ fontSize: '13px' }}>未使用</span>
           </Space>
         </div>
 
-        <Alert
-          message="注意事项"
-          description={
-            <ul style={{ margin: 0, paddingLeft: '16px' }}>
-              <li>实际可用容量会因磁盘厂商的十进制换算（1TB=1000GB）与操作系统的二进制换算（1TB=1024GB）而略有差异</li>
-              <li>RAID 不是备份方案，仍需定期备份重要数据</li>
-              <li>重建大容量磁盘时耗时较长，期间存在二次故障风险</li>
-              <li>RAID 10 需要偶数块硬盘（至少 4 块）</li>
-            </ul>
-          }
-          type="warning"
-          showIcon
-          icon={<WarningOutlined />}
-          style={{ marginTop: '16px' }}
-        />
-      </Card>
-
-      {/* RAID 类型说明卡片 */}
-      <Card title="RAID 类型速查" style={{ marginTop: '24px' }} size="small">
-        <Row gutter={[16, 16]}>
-          {Object.entries(RAID_CONFIGS).map(([key, config]) => (
-            <Col xs={24} sm={12} md={8} key={key}>
-              <Card size="small" style={{ height: '100%', borderLeft: `4px solid ${config.color}` }}>
-                <div style={{ fontWeight: 600, marginBottom: '4px' }}>{config.name}</div>
-                <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>{config.description}</div>
-                <Space>
-                  <Tag color="default" style={{ fontSize: '12px' }}>最少 {config.minDisks} 块{config.requiresEven ? '（偶数）' : ''}</Tag>
-                </Space>
-              </Card>
-            </Col>
-          ))}
-        </Row>
-      </Card>
+        <div style={{ marginTop: '16px', fontSize: '12px', color: '#888' }}>
+          计算逻辑说明：当使用不同容量的硬盘时，RAID 以最小盘容量为基准，大容量硬盘的多余空间标记为"未使用"。每块盘保留 10GB 系统空间。
+        </div>
+      </div>
     </div>
   );
 };
