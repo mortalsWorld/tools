@@ -63,6 +63,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             app_lib::commands::select_directory,
             app_lib::commands::select_file,
+            app_lib::commands::save_file_dialog,
             app_lib::commands::select_backup_directory,
             app_lib::commands::load_config,
             app_lib::commands::save_config,
