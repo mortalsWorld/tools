@@ -64,8 +64,12 @@ class TauriAPI {
     return invoke('select_file');
   }
 
-  async searchFiles(directory: string, pattern: string): Promise<string[]> {
-    return invoke('search_files', { directory, pattern });
+  async saveFileDialog(content: string, defaultName: string): Promise<string> {
+    return invoke('save_file_dialog', { content, defaultName });
+  }
+
+  async searchFiles(directory: string, pattern: string, limit?: number): Promise<string[]> {
+    return invoke('search_files', { directory, pattern, limit });
   }
 
   async openFile(path: string): Promise<void> {

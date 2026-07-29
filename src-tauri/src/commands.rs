@@ -12,6 +12,7 @@ use crate::AppState;
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use walkdir::WalkDir;
+use rayon::prelude::*;
 use rand::Rng;
 use rand::prelude::SliceRandom;
 use base64::Engine;
@@ -336,6 +337,22 @@ pub async fn select_file(app: tauri::AppHandle) -> Option<String> {
     file.map(|p| p.to_string())
 }
 
+/// 打开对话框让用户选择保存文件路径并保存内容
+#[command]
+pub async fn save_file_dialog(app: tauri::AppHandle, content: String, default_name: String) -> Result<String, String> {
+    let dir = app.dialog().file().blocking_pick_folder();
+    match dir {
+        Some(dir_path) => {
+            let dir_str = dir_path.to_string();
+            let dir_buf = PathBuf::from(&dir_str);
+            let file_path = dir_buf.join(&default_name);
+            fs::write(&file_path, content).map_err(|e| format!("保存文件失败: {}", e))?;
+            Ok(file_path.to_string_lossy().to_string())
+        }
+        None => Err("用户取消了保存".into()),
+    }
+}
+
 /// 打开对话框让用户选择备份目录
 #[command]
 pub async fn select_backup_directory(app: tauri::AppHandle) -> Option<String> {
@@ -397,23 +414,32 @@ pub async fn save_config(file_name: String, data: serde_json::Value) -> Result<b
 }
 
 /// 在指定目录中搜索文件名包含指定模式的文件
+/// 支持并行搜索和结果数量限制，避免大量结果导致性能问题
 #[command]
-pub async fn search_files(directory: String, pattern: String) -> Vec<String> {
-    let mut results = Vec::new();
+pub async fn search_files(directory: String, pattern: String, limit: Option<usize>) -> Vec<String> {
+    let max_results = limit.unwrap_or(2000);
     
     if !PathBuf::from(&directory).exists() {
-        return results;
+        return Vec::new();
     }
     
-    for entry in WalkDir::new(&directory).into_iter().filter_map(|e| e.ok()) {
-        if let Some(name) = entry.file_name().to_str() {
-            if name.to_lowercase().contains(&pattern.to_lowercase()) {
-                results.push(entry.path().to_string_lossy().to_string());
+    let lower_pattern = pattern.to_lowercase();
+    
+    let results: Vec<String> = WalkDir::new(&directory)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|entry| {
+            if let Some(name) = entry.file_name().to_str() {
+                name.to_lowercase().contains(&lower_pattern)
+            } else {
+                false
             }
-        }
-    }
+        })
+        .par_bridge()
+        .map(|entry| entry.path().to_string_lossy().to_string())
+        .collect();
     
-    results
+    results.into_iter().take(max_results).collect()
 }
 
 /// 安全验证打开目标（文件路径或 URL）

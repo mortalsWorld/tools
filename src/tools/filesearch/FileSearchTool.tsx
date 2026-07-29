@@ -1,12 +1,79 @@
-import React, { useState } from 'react';
-import { Card, Input, Button, Space, List, message } from 'antd';
-import { FolderOpenOutlined, SearchOutlined, FileOutlined, CopyOutlined } from '@ant-design/icons';
+import React, { useState, useMemo, useCallback } from 'react';
+import { Card, Input, Button, Space, List, message, Tag, Select } from 'antd';
+import { FolderOpenOutlined, SearchOutlined, FileOutlined, CopyOutlined, FilterOutlined } from '@ant-design/icons';
+
+const MAX_RESULTS = 2000;
+
+const FILE_TYPE_GROUPS: Record<string, { label: string; extensions: string[] }> = {
+  all: { label: '全部文件', extensions: [] },
+  code: { label: '代码文件', extensions: ['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.c', '.cpp', '.h', '.go', '.rs', '.rb', '.php', '.cs', '.swift', '.kt', '.scala', '.vue', '.svelte'] },
+  doc: { label: '文档文件', extensions: ['.txt', '.md', '.doc', '.docx', '.pdf', '.xls', '.xlsx', '.ppt', '.pptx', '.rtf', '.odt'] },
+  media: { label: '媒体文件', extensions: ['.mp3', '.mp4', '.wav', '.avi', '.mkv', '.mov', '.flv', '.webm', '.ogg', '.m4a', '.flac'] },
+  image: { label: '图片文件', extensions: ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico', '.tiff', '.psd'] },
+  archive: { label: '压缩文件', extensions: ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz'] },
+  config: { label: '配置文件', extensions: ['.json', '.yaml', '.yml', '.xml', '.toml', '.ini', '.conf', '.env', '.config'] },
+};
+
+interface FileItem {
+  path: string;
+  filename: string;
+  filenameLower: string;
+  ext: string;
+}
+
+function parseFilePath(path: string): FileItem {
+  const filename = path.split('\\').pop() || path.split('/').pop() || path;
+  const lastDot = filename.lastIndexOf('.');
+  const ext = lastDot > 0 && lastDot < filename.length - 1 ? filename.substring(lastDot).toLowerCase() : '';
+  return {
+    path,
+    filename,
+    filenameLower: filename.toLowerCase(),
+    ext,
+  };
+}
 
 export const FileSearchTool: React.FC = () => {
   const [directory, setDirectory] = useState('');
   const [searchPattern, setSearchPattern] = useState('');
-  const [searchResults, setSearchResults] = useState<string[]>([]);
+  const [fileItems, setFileItems] = useState<FileItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  
+  const [filterText, setFilterText] = useState('');
+  const [filterType, setFilterType] = useState<string>('all');
+
+  const availableTypes = useMemo(() => {
+    const options: { value: string; label: string; count: number }[] = [];
+    options.push({ value: 'all', label: '全部文件', count: fileItems.length });
+    
+    Object.entries(FILE_TYPE_GROUPS).forEach(([key, group]) => {
+      if (key === 'all') return;
+      const count = fileItems.filter(item => group.extensions.includes(item.ext)).length;
+      if (count > 0) {
+        options.push({ value: key, label: `${group.label} (${count})`, count });
+      }
+    });
+    
+    return options;
+  }, [fileItems]);
+
+  const filteredResults = useMemo(() => {
+    let results = fileItems;
+    
+    if (filterType !== 'all') {
+      const group = FILE_TYPE_GROUPS[filterType];
+      if (group) {
+        results = results.filter(item => group.extensions.includes(item.ext));
+      }
+    }
+    
+    if (filterText.trim()) {
+      const lowerFilter = filterText.toLowerCase();
+      results = results.filter(item => item.filenameLower.includes(lowerFilter) || item.path.toLowerCase().includes(lowerFilter));
+    }
+    
+    return results;
+  }, [fileItems, filterType, filterText]);
 
   const selectDirectory = async () => {
     try {
@@ -19,7 +86,7 @@ export const FileSearchTool: React.FC = () => {
     }
   };
 
-  const searchFiles = async () => {
+  const searchFiles = useCallback(async () => {
     if (!directory) {
       message.warning('请先选择目录');
       return;
@@ -30,16 +97,24 @@ export const FileSearchTool: React.FC = () => {
     }
 
     setIsSearching(true);
+    setFileItems([]);
+    setFilterText('');
+    setFilterType('all');
     try {
-      const results = await window.electronAPI.searchFiles(directory, searchPattern);
-      setSearchResults(results);
-      message.success(`找到 ${results.length} 个文件`);
+      const results = await (window.electronAPI as any).searchFiles(directory, searchPattern, MAX_RESULTS);
+      const parsed = results.map((path: string) => parseFilePath(path));
+      setFileItems(parsed);
+      if (results.length >= MAX_RESULTS) {
+        message.info(`找到超过 ${MAX_RESULTS} 个文件，仅显示前 ${MAX_RESULTS} 个`);
+      } else {
+        message.success(`找到 ${results.length} 个文件`);
+      }
     } catch (e) {
       message.error('搜索失败');
     } finally {
       setIsSearching(false);
     }
-  };
+  }, [directory, searchPattern]);
 
   const openFile = (filePath: string) => {
     try {
@@ -52,6 +127,11 @@ export const FileSearchTool: React.FC = () => {
   const copyPath = (filePath: string) => {
     navigator.clipboard.writeText(filePath);
     message.success('路径已复制');
+  };
+
+  const clearFilters = () => {
+    setFilterText('');
+    setFilterType('all');
   };
 
   return (
@@ -89,40 +169,77 @@ export const FileSearchTool: React.FC = () => {
           </Button>
         </Space>
 
-        <List
-          bordered
-          dataSource={searchResults}
-          renderItem={(item) => (
-            <List.Item
-              actions={[
-                <Button
-                  key="open"
-                  type="link"
-                  size="small"
-                  onClick={() => openFile(item)}
-                >
-                  打开
-                </Button>,
-                <Button
-                  key="copy"
-                  type="link"
-                  size="small"
-                  icon={<CopyOutlined />}
-                  onClick={() => copyPath(item)}
-                >
-                  复制路径
-                </Button>
-              ]}
-            >
-              <List.Item.Meta
-                avatar={<FileOutlined />}
-                title={item.split('\\').pop() || item.split('/').pop()}
-                description={item}
-              />
-            </List.Item>
-          )}
-          locale={{ emptyText: '未找到文件' }}
-        />
+        {fileItems.length > 0 && (
+          <Space style={{ width: '100%' }} wrap>
+            <Input
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              placeholder="二次过滤（在结果中筛选）"
+              prefix={<FilterOutlined />}
+              style={{ width: 260 }}
+              allowClear
+            />
+            <Select
+              value={filterType}
+              onChange={setFilterType}
+              style={{ width: 180 }}
+              options={availableTypes.map(opt => ({ value: opt.value, label: opt.label }))}
+              placeholder="文件类型"
+            />
+            {(filterText || filterType !== 'all') && (
+              <Button size="small" onClick={clearFilters}>
+                清除过滤
+              </Button>
+            )}
+            <Tag color="blue" style={{ marginLeft: 'auto' }}>
+              显示 {filteredResults.length} / {fileItems.length} 项
+            </Tag>
+          </Space>
+        )}
+
+        {fileItems.length >= MAX_RESULTS && (
+          <Tag color="warning">搜索结果较多，已限制显示前 {MAX_RESULTS} 个</Tag>
+        )}
+
+        <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+          <List
+            bordered
+            dataSource={filteredResults}
+            renderItem={(item) => (
+              <List.Item
+                actions={[
+                  <Button
+                    key="open"
+                    type="link"
+                    size="small"
+                    onClick={() => openFile(item.path)}
+                  >
+                    打开
+                  </Button>,
+                  <Button
+                    key="copy"
+                    type="link"
+                    size="small"
+                    icon={<CopyOutlined />}
+                    onClick={() => copyPath(item.path)}
+                  >
+                    复制路径
+                  </Button>
+                ]}
+                style={{ padding: '6px 12px', height: '60px' }}
+              >
+                <List.Item.Meta
+                  avatar={<FileOutlined />}
+                  title={item.filename}
+                  description={
+                    <span style={{ fontSize: '12px', color: '#888' }}>{item.path}</span>
+                  }
+                />
+              </List.Item>
+            )}
+            locale={{ emptyText: '未找到文件' }}
+          />
+        </div>
       </Space>
     </Card>
   );
