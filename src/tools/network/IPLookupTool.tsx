@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Card, Input, Button, Space, message, Table, Alert, Divider, Statistic, Row, Col, Badge, Tag, theme } from 'antd';
-import { SearchOutlined, ClearOutlined, CopyOutlined, DownloadOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import React, { useState, useMemo } from 'react';
+import { Card, Input, Button, Space, message, Table, Alert, Divider, Statistic, Row, Col, Badge, Tag, theme, Select } from 'antd';
+import { SearchOutlined, ClearOutlined, CopyOutlined, DownloadOutlined, CheckCircleOutlined, CloseCircleOutlined, FilterOutlined } from '@ant-design/icons';
 
 const { TextArea } = Input;
 
@@ -134,7 +134,69 @@ function parseRecord(rawLine: string): { record: ParsedRecord | null; error: str
   }
 }
 
-// 匹配IP
+// 将解析记录转为统一的 start/end 范围
+function getRange(rec: ParsedRecord): { start: number | bigint; end: number | bigint } | null {
+  if (rec.type === 'v4-range') {
+    return { start: rec.start!, end: rec.end! };
+  }
+  if (rec.type === 'v4-cidr') {
+    const base = rec.base as number;
+    const mask = rec.mask as number;
+    const end = (base | (~mask >>> 0)) >>> 0;
+    return { start: base, end };
+  }
+  if (rec.type === 'v6-cidr') {
+    const base = rec.base as bigint;
+    const mask = rec.mask as bigint;
+    const max128 = (1n << 128n) - 1n;
+    const wildcard = (~mask) & max128;
+    const end = base | wildcard;
+    return { start: base, end };
+  }
+  return null;
+}
+
+// 匹配关系类型
+type MatchRelation = 'exact' | 'contained' | 'contains' | 'overlap';
+
+const RELATION_LABELS: Record<MatchRelation, { text: string; color: string }> = {
+  exact: { text: '完全相同', color: '#722ed1' },
+  contained: { text: '被包含', color: '#1890ff' },
+  contains: { text: '包含', color: '#52c41a' },
+  overlap: { text: '范围重叠', color: '#fa8c16' },
+};
+
+// 两个解析记录的匹配关系
+function matchRelation(a: ParsedRecord, b: ParsedRecord): MatchRelation | null {
+  const aIsV6 = a.type === 'v6-cidr';
+  const bIsV6 = b.type === 'v6-cidr';
+  if (aIsV6 !== bIsV6) return null;
+
+  const ra = getRange(a);
+  const rb = getRange(b);
+  if (!ra || !rb) return null;
+
+  const aStart = typeof ra.start === 'bigint' ? ra.start : BigInt(ra.start);
+  const aEnd = typeof ra.end === 'bigint' ? ra.end : BigInt(ra.end);
+  const bStart = typeof rb.start === 'bigint' ? rb.start : BigInt(rb.start);
+  const bEnd = typeof rb.end === 'bigint' ? rb.end : BigInt(rb.end);
+
+  return computeRelation(aStart, aEnd, bStart, bEnd);
+}
+
+function computeRelation(aStart: bigint, aEnd: bigint, bStart: bigint, bEnd: bigint): MatchRelation | null {
+  // 完全相同
+  if (aStart === bStart && aEnd === bEnd) return 'exact';
+  // a 完全在 b 内 (被包含)
+  if (aStart >= bStart && aEnd <= bEnd) return 'contained';
+  // b 完全在 a 内 (包含)
+  if (bStart >= aStart && bEnd <= aEnd) return 'contains';
+  // 有交集但不完全包含 → 重叠
+  if (aStart <= bEnd && bStart <= aEnd) return 'overlap';
+  return null;
+}
+
+// 匹配单IP（向后兼容）
 function matchIP(targetIpStr: string, record: ParsedRecord): boolean {
   if (record.type === 'v4-range') {
     const ip = ipv4ToUint32(targetIpStr);
@@ -157,10 +219,15 @@ function matchIP(targetIpStr: string, record: ParsedRecord): boolean {
 
 // ==================== 组件 ====================
 
+interface MatchedSubnet {
+  subnet: string;
+  relation: MatchRelation;
+}
+
 interface MatchResult {
   ip: string;
   status: 'match' | 'miss' | 'invalid';
-  matched: string[];
+  matched: MatchedSubnet[];
 }
 
 export const IPLookupTool: React.FC = () => {
@@ -171,6 +238,9 @@ export const IPLookupTool: React.FC = () => {
   const [errors, setErrors] = useState<ParseError[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+  const [relationFilter, setRelationFilter] = useState<string | undefined>(undefined);
+  const [keywordFilter, setKeywordFilter] = useState('');
 
   const handleSearch = () => {
     if (!ipList.trim()) {
@@ -201,7 +271,7 @@ export const IPLookupTool: React.FC = () => {
       return;
     }
 
-    // 解析IP列表并匹配
+    // 解析IP列表并匹配（支持CIDR/范围/单IP，带关系类型）
     const ipLines = ipList.split('\n').filter(line => line.trim());
     const matchResults: MatchResult[] = [];
 
@@ -209,19 +279,27 @@ export const IPLookupTool: React.FC = () => {
       const rawIp = ipLine.trim().replace(/^["'\s]+|["'\s]+$/g, '');
       if (!rawIp) return;
 
-      const matchedSubnets: string[] = [];
-      for (const rec of parsedRecords) {
-        if (matchIP(rawIp, rec)) {
-          matchedSubnets.push(rec.original);
+      const { record: ipRec } = parseRecord(rawIp);
+      const matchedSubnets: MatchedSubnet[] = [];
+
+      for (const subnetRec of parsedRecords) {
+        if (ipRec) {
+          const rel = matchRelation(ipRec, subnetRec);
+          if (rel) {
+            matchedSubnets.push({ subnet: subnetRec.original, relation: rel });
+          }
+        } else {
+          if (matchIP(rawIp, subnetRec)) {
+            matchedSubnets.push({ subnet: subnetRec.original, relation: 'contained' });
+          }
         }
       }
 
       if (matchedSubnets.length > 0) {
         matchResults.push({ ip: rawIp, status: 'match', matched: matchedSubnets });
       } else {
-        const isValidIPv4 = ipv4ToUint32(rawIp) !== null;
-        const isValidIPv6 = isIPv6(rawIp) && ipv6ToBigInt(rawIp) !== null;
-        matchResults.push({ ip: rawIp, status: isValidIPv4 || isValidIPv6 ? 'miss' : 'invalid', matched: [] });
+        const isValid = ipRec !== null || ipv4ToUint32(rawIp) !== null || (isIPv6(rawIp) && ipv6ToBigInt(rawIp) !== null);
+        matchResults.push({ ip: rawIp, status: isValid ? 'miss' : 'invalid', matched: [] });
       }
     });
 
@@ -247,27 +325,63 @@ export const IPLookupTool: React.FC = () => {
     setResults([]);
     setErrors([]);
     setHasSearched(false);
+    setStatusFilter(undefined);
+    setRelationFilter(undefined);
+    setKeywordFilter('');
   };
 
+  // 过滤后的结果
+  const filteredResults = useMemo(() => {
+    return results.filter(r => {
+      if (statusFilter && r.status !== statusFilter) return false;
+      if (relationFilter) {
+        const hasRel = r.matched.some(m => m.relation === relationFilter);
+        if (!hasRel) return false;
+      }
+      if (keywordFilter) {
+        const kw = keywordFilter.toLowerCase();
+        if (!r.ip.toLowerCase().includes(kw) && !r.matched.some(m => m.subnet.toLowerCase().includes(kw))) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [results, statusFilter, relationFilter, keywordFilter]);
+
   const handleCopyResults = () => {
-    const text = results.map(r => `${r.ip}\t${r.status === 'match' ? '匹配' : r.status === 'miss' ? '未匹配' : '无效IP'}\t${r.matched.join('; ')}`).join('\n');
+    const text = filteredResults.map(r => {
+      const statusText = r.status === 'match' ? '匹配' : r.status === 'miss' ? '未匹配' : '无效IP';
+      const matchText = r.matched.map(m => `${m.subnet}(${RELATION_LABELS[m.relation].text})`).join('; ');
+      return `${r.ip}\t${statusText}\t${matchText}`;
+    }).join('\n');
     navigator.clipboard.writeText(text);
     message.success('结果已复制到剪贴板');
   };
 
   const handleExportCSV = () => {
-    if (results.length === 0) {
+    if (filteredResults.length === 0) {
       message.warning('没有可导出的数据');
       return;
     }
 
-    const headers = ['序号', 'IP地址', '状态', '匹配的子网'];
-    const rows = results.map((r, idx) => [
-      (idx + 1).toString(),
-      r.ip,
-      r.status === 'match' ? '匹配' : r.status === 'miss' ? '未匹配' : '无效IP',
-      r.matched.join('; '),
-    ]);
+    const headers = ['序号', 'IP地址', '状态', '匹配关系', '匹配的子网'];
+    const rows: string[][] = [];
+    filteredResults.forEach((r, idx) => {
+      const statusText = r.status === 'match' ? '匹配' : r.status === 'miss' ? '未匹配' : '无效IP';
+      if (r.matched.length === 0) {
+        rows.push([(idx + 1).toString(), r.ip, statusText, '', '']);
+      } else {
+        r.matched.forEach((m, mIdx) => {
+          rows.push([
+            mIdx === 0 ? (idx + 1).toString() : '',
+            mIdx === 0 ? r.ip : '',
+            mIdx === 0 ? statusText : '',
+            RELATION_LABELS[m.relation].text,
+            m.subnet,
+          ]);
+        });
+      }
+    });
 
     const csvContent = [headers, ...rows]
       .map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(','))
@@ -307,7 +421,7 @@ export const IPLookupTool: React.FC = () => {
       render: (_: any, __: any, index: number) => index + 1,
     },
     {
-      title: 'IP地址',
+      title: 'IP/网段',
       dataIndex: 'ip',
       key: 'ip',
       render: (ip: string) => <code style={{ fontFamily: 'Monaco, Consolas, monospace' }}>{ip}</code>,
@@ -328,18 +442,47 @@ export const IPLookupTool: React.FC = () => {
       },
     },
     {
-      title: '匹配的子网',
+      title: '匹配关系',
       dataIndex: 'matched',
-      key: 'matched',
-      render: (matched: string[]) => {
+      key: 'relations',
+      width: 200,
+      render: (matched: MatchedSubnet[]) => {
         if (matched.length === 0) return '-';
         return (
           <Space size={[4, 4]} wrap>
-            {matched.map((m, idx) => (
-              <Tag key={idx} color="blue" style={{ fontFamily: 'Monaco, Consolas, monospace' }}>
-                {m}
-              </Tag>
-            ))}
+            {matched.map((m, idx) => {
+              const info = RELATION_LABELS[m.relation];
+              return (
+                <Tag key={idx} color={info.color} style={{ fontSize: '12px' }}>
+                  {info.text}
+                </Tag>
+              );
+            })}
+          </Space>
+        );
+      },
+    },
+    {
+      title: '匹配的子网',
+      dataIndex: 'matched',
+      key: 'matched',
+      render: (matched: MatchedSubnet[]) => {
+        if (matched.length === 0) return '-';
+        return (
+          <Space size={[4, 4]} wrap>
+            {matched.map((m, idx) => {
+              const info = RELATION_LABELS[m.relation];
+              return (
+                <Tag
+                  key={idx}
+                  color={info.color}
+                  style={{ fontFamily: 'Monaco, Consolas, monospace', margin: 0 }}
+                  title={info.text}
+                >
+                  {m.subnet}
+                </Tag>
+              );
+            })}
           </Space>
         );
       },
@@ -371,15 +514,20 @@ export const IPLookupTool: React.FC = () => {
           description={
             <div>
               <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
-                <li><strong>子网格式：</strong></li>
+                <li><strong>待查找IP（左侧面板）：</strong></li>
+                <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
+                  <li>CIDR格式：<code>192.168.1.0/24</code>、<code>10.0.0.0/8</code>、<code>::1/128</code></li>
+                  <li>单IP格式：<code>192.168.1.1</code>、<code>::1</code></li>
+                  <li>范围格式：<code>192.168.1.0-255</code>、<code>192.168.1.0-192.168.1.255</code></li>
+                </ul>
+                <li><strong>子网列表（右侧面板）：</strong></li>
                 <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
                   <li>CIDR格式：<code>192.168.1.0/24</code>、<code>10.0.0.0/8</code>、<code>::1/128</code></li>
                   <li>范围前缀格式：<code>192.168.1.0-255</code>（起始IP-结束前缀）</li>
                   <li>完整范围格式：<code>192.168.1.0-192.168.1.255</code></li>
                   <li>单IP格式：<code>192.168.1.1</code>、<code>::1</code></li>
                 </ul>
-                <li><strong>支持IPv4和IPv6</strong></li>
-                <li><strong>解析失败的记录会显示在错误面板中</strong></li>
+                <li><strong>支持IPv4和IPv6，解析失败的记录会显示在错误面板中</strong></li>
               </ul>
             </div>
           }
@@ -394,9 +542,9 @@ export const IPLookupTool: React.FC = () => {
             <TextArea
               value={ipList}
               onChange={(e) => setIpList(e.target.value)}
-              placeholder="输入要查找的IP地址，每行一个，例如：&#10;192.168.1.100&#10;10.0.0.50&#10;172.16.0.1"
+              placeholder="输入要查找的IP或CIDR，每行一个，例如：&#10;192.168.1.100&#10;10.0.0.0/8&#10;192.168.1.0-255&#10;::1"
               autoSize={{ minRows: 6, maxRows: 12 }}
-              style={{ 
+              style={{
                 fontFamily: "'Monaco', 'Menlo', monospace",
                 fontSize: '13px'
               }}
@@ -478,9 +626,48 @@ export const IPLookupTool: React.FC = () => {
               </Col>
             </Row>
 
-            <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 'bold' }}>匹配结果详情</span>
+            <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+              <span style={{ fontWeight: 'bold' }}>
+                匹配结果详情
+                {(statusFilter || relationFilter || keywordFilter) && (
+                  <Tag color="processing" style={{ marginLeft: '8px' }}>
+                    <FilterOutlined /> 已筛选 {filteredResults.length} / {results.length}
+                  </Tag>
+                )}
+              </span>
               <Space>
+                <Select
+                  placeholder="按状态筛选"
+                  allowClear
+                  style={{ width: 130 }}
+                  value={statusFilter}
+                  onChange={(v) => { setStatusFilter(v); setPagination(prev => ({ ...prev, current: 1 })); }}
+                  options={[
+                    { value: 'match', label: '匹配' },
+                    { value: 'miss', label: '未匹配' },
+                    { value: 'invalid', label: '无效IP' },
+                  ]}
+                />
+                <Select
+                  placeholder="按关系类型筛选"
+                  allowClear
+                  style={{ width: 150 }}
+                  value={relationFilter}
+                  onChange={(v) => { setRelationFilter(v); setPagination(prev => ({ ...prev, current: 1 })); }}
+                  options={[
+                    { value: 'exact', label: '完全相同' },
+                    { value: 'contained', label: '被包含' },
+                    { value: 'contains', label: '包含' },
+                    { value: 'overlap', label: '范围重叠' },
+                  ]}
+                />
+                <Input
+                  placeholder="关键词搜索"
+                  allowClear
+                  style={{ width: 160 }}
+                  value={keywordFilter}
+                  onChange={(e) => { setKeywordFilter(e.target.value); setPagination(prev => ({ ...prev, current: 1 })); }}
+                />
                 <Button size="small" icon={<CopyOutlined />} onClick={handleCopyResults}>
                   复制结果
                 </Button>
@@ -491,7 +678,7 @@ export const IPLookupTool: React.FC = () => {
             </div>
             <Table
               columns={columns}
-              dataSource={results.map((r, idx) => ({ ...r, key: idx }))}
+              dataSource={filteredResults.map((r, idx) => ({ ...r, key: idx }))}
               pagination={{
                 ...pagination,
                 showSizeChanger: true,
