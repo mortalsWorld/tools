@@ -129,6 +129,10 @@ fn main() {
                 let _ = app_lib::commands::migrate_old_config();
                 // 加载配置并注册快捷键
                 let _ = register_shortcuts_from_config_sync(&app_handle);
+                // 检查并执行自动备份
+                let _ = tauri::async_runtime::block_on(
+                    app_lib::commands::check_and_run_auto_backup()
+                );
             });
 
             // 创建顶部菜单栏

@@ -1104,25 +1104,25 @@ export const SettingsTool: React.FC = () => {
             </Form.Item>
             <Form.Item
               label="备份间隔"
-              name="backupInterval"
               style={{ flex: 2 }}
             >
               <Space.Compact style={{ width: '100%' }}>
-                <InputNumber
-                  min={1}
-                  style={{ width: '45%' }}
-                  placeholder="间隔"
-                  value={form.getFieldValue('backupInterval') || 24}
-                  onChange={(value) => form.setFieldsValue({ backupInterval: value })}
-                />
+                <Form.Item
+                  name="backupInterval"
+                  noStyle
+                >
+                  <InputNumber
+                    min={1}
+                    style={{ width: '45%' }}
+                    placeholder="间隔"
+                  />
+                </Form.Item>
                 <Form.Item
                   name="backupIntervalUnit"
                   noStyle
                 >
                   <Select 
                     style={{ width: '55%' }}
-                    value={form.getFieldValue('backupIntervalUnit') || 'hours'}
-                    onChange={(value) => form.setFieldsValue({ backupIntervalUnit: value })}
                   >
                     <Option value="hours">小时</Option>
                     <Option value="days">天</Option>

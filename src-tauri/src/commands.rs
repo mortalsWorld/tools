@@ -2984,3 +2984,95 @@ pub fn migrate_old_config() -> Result<(), String> {
     log::info!("旧版配置自动迁移完成");
     Ok(())
 }
+
+/// 检查并执行自动备份
+/// 在应用启动时调用，如果满足条件则自动创建备份
+pub async fn check_and_run_auto_backup() -> Result<(), String> {
+    let config_path = get_config_dir().join("app-config.json");
+    
+    if !config_path.exists() {
+        log::info!("配置文件不存在，跳过自动备份检查");
+        return Ok(());
+    }
+    
+    let content = fs::read_to_string(&config_path)
+        .map_err(|e| format!("读取配置失败: {}", e))?;
+    
+    let config: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("解析配置失败: {}", e))?;
+    
+    // 检查是否启用了自动备份
+    let backup_enabled = config.get("backupEnabled")
+        .or_else(|| config.get("backup_enabled"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    
+    if !backup_enabled {
+        log::info!("自动备份未启用，跳过");
+        return Ok(());
+    }
+    
+    // 获取备份间隔
+    let backup_interval = config.get("backupInterval")
+        .or_else(|| config.get("backup_interval"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(24);
+    
+    let backup_interval_unit = config.get("backupIntervalUnit")
+        .or_else(|| config.get("backup_interval_unit"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("hours");
+    
+    // 计算间隔秒数
+    let interval_seconds = match backup_interval_unit {
+        "days" => backup_interval * 86400,
+        _ => backup_interval * 3600, // hours
+    };
+    
+    // 获取上次备份时间
+    let last_backup_time = config.get("lastBackupTime")
+        .or_else(|| config.get("last_backup_time"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    
+    // 如果上次备份时间为0（从未备份过），或者已超过间隔时间，则执行备份
+    let should_backup = last_backup_time == 0 || (now - last_backup_time) >= interval_seconds;
+    
+    if !should_backup {
+        let hours_remaining = interval_seconds.saturating_sub(now - last_backup_time) / 3600;
+        log::info!("距上次备份还剩 {} 小时，跳过自动备份", hours_remaining);
+        return Ok(());
+    }
+    
+    log::info!("开始执行自动备份...");
+    
+    // 执行备份
+    let backup_result = create_full_backup(Some("自动备份".to_string())).await;
+    
+    match backup_result {
+        Ok(_) => {
+            // 更新 lastBackupTime
+            let mut config_mut = config.clone();
+            config_mut["lastBackupTime"] = serde_json::json!(now);
+            config_mut["last_backup_time"] = serde_json::json!(now);
+            
+            let updated_content = serde_json::to_string_pretty(&config_mut)
+                .map_err(|e| format!("序列化配置失败: {}", e))?;
+            
+            fs::write(&config_path, updated_content)
+                .map_err(|e| format!("更新备份时间失败: {}", e))?;
+            
+            log::info!("自动备份完成");
+            Ok(())
+        }
+        Err(e) => {
+            log::error!("自动备份失败: {}", e);
+            Err(e)
+        }
+    }
+}
