@@ -31,6 +31,7 @@ export const CodeFormatter: React.FC = () => {
   const [unicodeDecode, setUnicodeDecode] = useState(true);
   const [quoteToDouble, setQuoteToDouble] = useState(true);
   const [removeEscape, setRemoveEscape] = useState(false);
+  const [removeComments, setRemoveComments] = useState(true);
 
   const [parseError, setParseError] = useState<ParseError | null>(null);
   const lineNumbersRef = useRef<HTMLDivElement>(null);
@@ -120,17 +121,71 @@ export const CodeFormatter: React.FC = () => {
     }
   };
 
+  const removeJsonComments = (json: string): string => {
+    const result: string[] = [];
+    let i = 0;
+    let inString = false;
+    let escape = false;
+
+    while (i < json.length) {
+      const ch = json[i];
+
+      if (inString) {
+        result.push(ch);
+        if (escape) {
+          escape = false;
+        } else if (ch === '\\') {
+          escape = true;
+        } else if (ch === '"') {
+          inString = false;
+        }
+        i++;
+        continue;
+      }
+
+      if (ch === '"') {
+        inString = true;
+        result.push(ch);
+        i++;
+        continue;
+      }
+
+      if (ch === '/' && i + 1 < json.length && json[i + 1] === '/') {
+        i += 2;
+        while (i < json.length && json[i] !== '\n') {
+          i++;
+        }
+        continue;
+      }
+
+      if (ch === '#') {
+        i++;
+        while (i < json.length && json[i] !== '\n') {
+          i++;
+        }
+        continue;
+      }
+
+      result.push(ch);
+      i++;
+    }
+
+    return result.join('');
+  };
+
   const formatJson = () => {
     try {
       let processedInput = input;
+      if (removeComments) {
+        processedInput = removeJsonComments(processedInput);
+      }
       if (quoteToDouble) {
         processedInput = processedInput
-          .replace(/'(?![^\\]*\\)'/g, '"')
-          .replace(/"([^"]*)"'(?![^\\]*\\)'/g, '"$1"');
-        processedInput = processedInput.replace(/:\s*'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_match, content) => {
-          const unescaped = content.replace(/\\'/g, "'");
-          return `: "${unescaped}"`;
-        });
+          .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_match, content) => {
+            const unescaped = content.replace(/\\'/g, "'");
+            const escaped = unescaped.replace(/"/g, '\\"');
+            return `"${escaped}"`;
+          });
       }
       if (removeEscape) {
         processedInput = processedInput
@@ -510,6 +565,9 @@ export const CodeFormatter: React.FC = () => {
                   </Checkbox>
                   <Checkbox checked={removeEscape} onChange={(e) => setRemoveEscape(e.target.checked)}>
                     去掉转义
+                  </Checkbox>
+                  <Checkbox checked={removeComments} onChange={(e) => setRemoveComments(e.target.checked)}>
+                    移除注释(#/ //)
                   </Checkbox>
                 </div>
               </div>
