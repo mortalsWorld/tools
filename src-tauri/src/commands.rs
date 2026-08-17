@@ -578,6 +578,10 @@ pub struct NetworkInfo {
 pub async fn get_processes() -> Vec<ProcessInfo> {
     let mut system = sysinfo::System::new_all();
     system.refresh_all();
+    
+    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
 
     let pid_ports = get_pid_ports();
     let total_processes = system.processes().len();
@@ -608,7 +612,7 @@ pub async fn get_processes() -> Vec<ProcessInfo> {
     );
     // 输出前 5 个有端口的进程用于调试
     for p in processes.iter().filter(|p| !p.ports.is_empty()).take(5) {
-        log::info!("[get_processes] 有端口的进程: PID={}, name={}, ports={:?}", p.pid, p.name, p.ports);
+        log::info!("[get_processes] 有端口的进程: PID={}, name={}, ports={:?}, cpu={}", p.pid, p.name, p.ports, p.cpu_usage);
     }
     
     processes.sort_by(|a, b| b.memory_bytes.cmp(&a.memory_bytes));

@@ -2,13 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { 
   Card, Table, Button, Input, Space, Tag, message, Modal, Descriptions, Progress, 
   Row, Col, Typography, Checkbox, Radio, theme, Tooltip, Badge, Empty, Spin,
-  Tabs
+  Tabs, Switch
 } from 'antd'
 import { 
   ReloadOutlined, DeleteOutlined, SearchOutlined, FileSearchOutlined, 
   CiOutlined, DatabaseOutlined, MacCommandOutlined, WifiOutlined, 
   MoreOutlined, CloseCircleOutlined, AppstoreOutlined, FolderOpenOutlined,
-  FolderAddOutlined, FileAddOutlined
+  FolderAddOutlined, FileAddOutlined, MergeCellsOutlined
 } from '@ant-design/icons'
 
 const { Title, Text } = Typography
@@ -66,8 +66,11 @@ export const ProcessTool: React.FC = () => {
   const [selectAll, setSelectAll] = useState(false)
   const [cpuUsage, setCpuUsage] = useState<number>(0)
   const [portSearchText, setPortSearchText] = useState('')
-  const [expandedPorts, setExpandedPorts] = useState<Set<number>>(new Set())
+  const [expandedPorts, setExpandedPorts] = useState<Set<string | number>>(new Set())
   const [activeTab, setActiveTab] = useState<'process' | 'file'>('process')
+  const [mergeByName, setMergeByName] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(15)
 
   const loadProcesses = async () => {
     setLoading(true)
@@ -228,12 +231,12 @@ export const ProcessTool: React.FC = () => {
     setSelectAll(newSelected.size === filteredProcesses.length && filteredProcesses.length > 0)
   }
 
-  const togglePortExpand = (pid: number) => {
+  const togglePortExpand = (key: string | number) => {
     const newExpanded = new Set(expandedPorts)
-    if (newExpanded.has(pid)) {
-      newExpanded.delete(pid)
+    if (newExpanded.has(key)) {
+      newExpanded.delete(key)
     } else {
-      newExpanded.add(pid)
+      newExpanded.add(key)
     }
     setExpandedPorts(newExpanded)
   }
@@ -248,214 +251,499 @@ export const ProcessTool: React.FC = () => {
     return matchSearch && matchFileHandle && matchPort
   })
 
+  interface MergedProcessInfo {
+    key: string
+    name: string
+    count: number
+    pids: number[]
+    totalCpu: number
+    totalMemoryBytes: number
+    totalMemory: string
+    allPorts: number[]
+    processes: ProcessInfo[]
+  }
+
+  const mergedProcesses = useMemo<MergedProcessInfo[]>(() => {
+    if (!mergeByName) return []
+    const map = new Map<string, MergedProcessInfo>()
+    for (const p of filteredProcesses) {
+      const existing = map.get(p.name)
+      if (existing) {
+        existing.count++
+        existing.pids.push(p.pid)
+        existing.totalCpu += p.cpuUsage
+        existing.totalMemoryBytes += p.memoryBytes
+        existing.processes.push(p)
+        if (p.ports && p.ports.length > 0) {
+          for (const port of p.ports) {
+            if (!existing.allPorts.includes(port)) {
+              existing.allPorts.push(port)
+            }
+          }
+        }
+      } else {
+        map.set(p.name, {
+          key: p.name,
+          name: p.name,
+          count: 1,
+          pids: [p.pid],
+          totalCpu: p.cpuUsage,
+          totalMemoryBytes: p.memoryBytes,
+          totalMemory: p.memory,
+          allPorts: p.ports ? [...p.ports] : [],
+          processes: [p]
+        })
+      }
+    }
+    const result = Array.from(map.values())
+    result.forEach(m => {
+      m.totalMemory = formatBytes(m.totalMemoryBytes)
+    })
+    result.sort((a, b) => b.totalMemoryBytes - a.totalMemoryBytes)
+    return result
+  }, [filteredProcesses, mergeByName])
+
+  const displayProcesses = mergeByName 
+    ? mergedProcesses 
+    : filteredProcesses
+
   const memoryTotal = systemInfo?.memory?.total || 1
 
-  const columns = [
-    {
-      title: (
-        <Checkbox
-          checked={selectAll}
-          onChange={toggleSelectAll}
-          disabled={filteredProcesses.length === 0}
-        />
-      ),
-      key: 'checkbox',
-      width: 56,
-      fixed: 'left' as const,
-      render: (_: any, record: ProcessInfo) => (
-        <Checkbox
-          checked={selectedPids.has(record.pid)}
-          onChange={() => toggleSelectPid(record.pid)}
-        />
-      )
-    },
-    {
-      title: (
-        <Space size="small">
-          <MacCommandOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
-          <span style={{ fontSize: 13, fontWeight: 500 }}>PID</span>
-        </Space>
-      ),
-      dataIndex: 'pid',
-      key: 'pid',
-      width: 90,
-      fixed: 'left' as const,
-      sorter: (a: ProcessInfo, b: ProcessInfo) => a.pid - b.pid,
-      render: (pid: number) => (
-        <code style={{ 
-          fontSize: 12, 
-          fontWeight: 500,
-          padding: '4px 10px', 
-          background: '#f0f5ff', 
-          borderRadius: 6,
-          color: '#1890ff'
-        }}>
-          {pid}
-        </code>
-      )
-    },
-    {
-      title: (
-        <Space size="small">
-          <AppstoreOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
-          <span style={{ fontSize: 13, fontWeight: 500 }}>进程名称</span>
-        </Space>
-      ),
-      dataIndex: 'name',
-      key: 'name',
-      width: 180,
-      sorter: (a: ProcessInfo, b: ProcessInfo) => a.name.localeCompare(b.name),
-      ellipsis: true,
-      render: (text: string, record: ProcessInfo) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, maxWidth: '100%' }}>
-          <span style={{ fontWeight: 500, fontSize: 13 }}>{text}</span>
-          {fileHandles.includes(record.pid) && (
-            <Badge status="error" text="占用" style={{ fontSize: 11 }} />
-          )}
-        </div>
-      )
-    },
-    {
-      title: (
-        <Space size="small">
-          <CiOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
-          <span style={{ fontSize: 13, fontWeight: 500 }}>CPU</span>
-        </Space>
-      ),
-      dataIndex: 'cpuUsage',
-      key: 'cpuUsage',
-      width: 130,
-      sorter: (a: ProcessInfo, b: ProcessInfo) => a.cpuUsage - b.cpuUsage,
-      render: (usage: number) => (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-            <span style={{ fontSize: 12, color: token.colorTextSecondary }}>使用率</span>
-            <span style={{ 
-              fontSize: 13, 
-              fontWeight: 500, 
-              color: getStatusColor(usage) 
-            }}>
-              {usage.toFixed(1)}%
-            </span>
-          </div>
-          <Progress
-            percent={Math.min(usage, 100)}
-            size="small"
-            showInfo={false}
-            strokeColor={getStatusColor(usage)}
-            strokeWidth={6}
-            trailColor="#f0f0f0"
-          />
-        </div>
-      )
-    },
-    {
-      title: (
-        <Space size="small">
-          <DatabaseOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
-          <span style={{ fontSize: 13, fontWeight: 500 }}>内存</span>
-        </Space>
-      ),
-      key: 'memoryUsage',
-      width: 160,
-      sorter: (a: ProcessInfo, b: ProcessInfo) => a.memoryBytes - b.memoryBytes,
-      render: (_: any, record: ProcessInfo) => {
-        const usagePercent = (record.memoryBytes / memoryTotal * 100)
-        return (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <span style={{ fontSize: 12, color: token.colorTextSecondary }}>已用</span>
-              <span style={{ 
-                fontSize: 12, 
-                fontWeight: 500, 
-                color: getStatusColor(usagePercent) 
-              }}>
-                {formatBytes(record.memoryBytes)}
-              </span>
-            </div>
-            <Progress
-              percent={Math.min(usagePercent, 100)}
-              size="small"
-              showInfo={false}
-              strokeColor={getStatusColor(usagePercent)}
-              strokeWidth={6}
-              trailColor="#f0f0f0"
-            />
-          </div>
-        )
-      }
-    },
-    {
-      title: (
-        <Space size="small">
-          <WifiOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
-          <span style={{ fontSize: 13, fontWeight: 500 }}>端口</span>
-        </Space>
-      ),
-      dataIndex: 'ports',
-      key: 'ports',
-      width: 200,
-      sorter: (a: ProcessInfo, b: ProcessInfo) => (a.ports?.length || 0) - (b.ports?.length || 0),
-      render: (ports: number[], record: ProcessInfo) => {
-        if (!ports || ports.length === 0) {
-          return <Text type="secondary" style={{ fontSize: 12 }}>-</Text>
+  const handleKillMergedProcesses = async (merged: MergedProcessInfo) => {
+    Modal.confirm({
+      title: `确认结束所有 "${merged.name}" 进程`,
+      content: `将结束 <strong>${merged.count}</strong> 个 "${merged.name}" 进程 (PIDs: ${merged.pids.join(', ')})`,
+      okText: '确认',
+      cancelText: '取消',
+      onOk: async () => {
+        const result = await (window.electronAPI as any).killProcesses(merged.pids)
+        if (result.success) {
+          message.success(`成功结束 ${merged.count - (result.errors?.length || 0)} 个进程`)
+          loadProcesses()
+        } else {
+          message.error('结束进程失败')
         }
-        
-        const isExpanded = expandedPorts.has(record.pid)
-        const displayPorts = isExpanded ? ports : ports.slice(0, 5)
-        
-        return (
-          <div>
-            <Space size="small" wrap>
-              {displayPorts.map(port => (
-                <Tag 
-                  key={port} 
-                  color="blue" 
-                  style={{ 
-                    fontSize: 11, 
-                    padding: '3px 8px',
-                    borderRadius: 4,
-                    fontWeight: 500
-                  }}
-                >
-                  {port}
-                </Tag>
-              ))}
-            </Space>
-            {ports.length > 5 && (
-              <Button
-                type="link"
-                size="small"
-                icon={isExpanded ? <CloseCircleOutlined /> : <MoreOutlined />}
-                onClick={() => togglePortExpand(record.pid)}
-                style={{ padding: 0, marginLeft: 4, color: '#1890ff' }}
-              >
-                {isExpanded ? '收起' : `+${ports.length - 5}`}
-              </Button>
-            )}
-          </div>
-        )
       }
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 80,
-      fixed: 'right' as const,
-      render: (_: any, record: ProcessInfo) => (
-        <Tooltip title="结束进程">
-          <Button
-            type="text"
-            danger
-            size="small"
-            icon={<DeleteOutlined />}
-            onClick={() => handleKillProcess(record.pid)}
-            style={{ fontSize: 13, padding: '4px 8px' }}
-          />
-        </Tooltip>
-      )
+    })
+  }
+
+  const columns = useMemo(() => {
+    if (mergeByName) {
+      return [
+        {
+          title: 'PID 列表',
+          key: 'pids',
+          width: 150,
+          fixed: 'left' as const,
+          render: (_: any, record: MergedProcessInfo) => (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+              {record.pids.slice(0, 3).map(pid => (
+                <code key={pid} style={{ 
+                  fontSize: 11, 
+                  padding: '2px 6px', 
+                  background: '#f0f5ff', 
+                  borderRadius: 4,
+                  color: '#1890ff'
+                }}>
+                  {pid}
+                </code>
+              ))}
+              {record.pids.length > 3 && (
+                <Tooltip title={record.pids.join(', ')}>
+                  <code style={{ 
+                    fontSize: 11, 
+                    padding: '2px 6px', 
+                    background: '#fff7e6', 
+                    borderRadius: 4,
+                    color: '#fa8c16'
+                  }}>
+                    +{record.pids.length - 3}
+                  </code>
+                </Tooltip>
+              )}
+            </div>
+          )
+        },
+        {
+          title: (
+            <Space size="small">
+              <AppstoreOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>进程名称</span>
+            </Space>
+          ),
+          dataIndex: 'name',
+          key: 'name',
+          width: 250,
+          sorter: (a: MergedProcessInfo, b: MergedProcessInfo) => a.name.localeCompare(b.name),
+          render: (text: string, record: MergedProcessInfo) => (
+            <Tooltip title={text} placement="topLeft">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: '100%' }}>
+                <span style={{ fontWeight: 500, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text}</span>
+                <Badge 
+                  count={record.count} 
+                  style={{ 
+                    backgroundColor: record.count > 1 ? '#1890ff' : '#52c41a',
+                    fontSize: 11,
+                    boxShadow: 'none',
+                    flexShrink: 0
+                  }}
+                />
+              </div>
+            </Tooltip>
+          )
+        },
+        {
+          title: (
+            <Space size="small">
+              <CiOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>CPU (合计)</span>
+            </Space>
+          ),
+          dataIndex: 'totalCpu',
+          key: 'totalCpu',
+          width: 130,
+          sorter: (a: MergedProcessInfo, b: MergedProcessInfo) => a.totalCpu - b.totalCpu,
+          render: (usage: number) => (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{ fontSize: 12, color: token.colorTextSecondary }}>总使用率</span>
+                <span style={{ 
+                  fontSize: 13, 
+                  fontWeight: 500, 
+                  color: getStatusColor(usage) 
+                }}>
+                  {usage.toFixed(1)}%
+                </span>
+              </div>
+              <Progress
+                percent={Math.min(usage, 100)}
+                size="small"
+                showInfo={false}
+                strokeColor={getStatusColor(usage)}
+                strokeWidth={6}
+                trailColor="#f0f0f0"
+              />
+            </div>
+          )
+        },
+        {
+          title: (
+            <Space size="small">
+              <DatabaseOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>内存 (合计)</span>
+            </Space>
+          ),
+          key: 'totalMemory',
+          width: 160,
+          sorter: (a: MergedProcessInfo, b: MergedProcessInfo) => a.totalMemoryBytes - b.totalMemoryBytes,
+          render: (_: any, record: MergedProcessInfo) => {
+            const usagePercent = (record.totalMemoryBytes / memoryTotal * 100)
+            return (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, color: token.colorTextSecondary }}>总占用</span>
+                  <span style={{ 
+                    fontSize: 12, 
+                    fontWeight: 500, 
+                    color: getStatusColor(usagePercent) 
+                  }}>
+                    {record.totalMemory}
+                  </span>
+                </div>
+                <Progress
+                  percent={Math.min(usagePercent, 100)}
+                  size="small"
+                  showInfo={false}
+                  strokeColor={getStatusColor(usagePercent)}
+                  strokeWidth={6}
+                  trailColor="#f0f0f0"
+                />
+              </div>
+            )
+          }
+        },
+        {
+          title: (
+            <Space size="small">
+              <WifiOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>端口 (合并)</span>
+            </Space>
+          ),
+          dataIndex: 'allPorts',
+          key: 'allPorts',
+          width: 200,
+          render: (ports: number[], record: MergedProcessInfo) => {
+            if (!ports || ports.length === 0) {
+              return <Text type="secondary" style={{ fontSize: 12 }}>-</Text>
+            }
+            
+            const isExpanded = expandedPorts.has(record.name)
+            const displayPorts = isExpanded ? ports : ports.slice(0, 5)
+            
+            return (
+              <div>
+                <Space size="small" wrap>
+                  {displayPorts.map(port => (
+                    <Tag 
+                      key={port} 
+                      color="blue" 
+                      style={{ 
+                        fontSize: 11, 
+                        padding: '3px 8px',
+                        borderRadius: 4,
+                        fontWeight: 500
+                      }}
+                    >
+                      {port}
+                    </Tag>
+                  ))}
+                </Space>
+                {ports.length > 5 && (
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={isExpanded ? <CloseCircleOutlined /> : <MoreOutlined />}
+                    onClick={() => togglePortExpand(record.name)}
+                    style={{ padding: 0, marginLeft: 4, color: '#1890ff' }}
+                  >
+                    {isExpanded ? '收起' : `+${ports.length - 5}`}
+                  </Button>
+                )}
+              </div>
+            )
+          }
+        },
+        {
+          title: '操作',
+          key: 'action',
+          width: 120,
+          fixed: 'right' as const,
+          render: (_: any, record: MergedProcessInfo) => (
+            <Tooltip title={`结束全部 ${record.count} 个进程`}>
+              <Button
+                type="text"
+                danger
+                size="small"
+                icon={<DeleteOutlined />}
+                onClick={() => handleKillMergedProcesses(record)}
+                style={{ fontSize: 12, padding: '4px 8px' }}
+              >
+                结束全部
+              </Button>
+            </Tooltip>
+          )
+        }
+      ]
+    } else {
+      return [
+        {
+          title: (
+            <Checkbox
+              checked={selectAll}
+              onChange={toggleSelectAll}
+              disabled={filteredProcesses.length === 0}
+            />
+          ),
+          key: 'checkbox',
+          width: 56,
+          fixed: 'left' as const,
+          render: (_: any, record: ProcessInfo) => (
+            <Checkbox
+              checked={selectedPids.has(record.pid)}
+              onChange={() => toggleSelectPid(record.pid)}
+            />
+          )
+        },
+        {
+          title: (
+            <Space size="small">
+              <MacCommandOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>PID</span>
+            </Space>
+          ),
+          dataIndex: 'pid',
+          key: 'pid',
+          width: 90,
+          fixed: 'left' as const,
+          sorter: (a: ProcessInfo, b: ProcessInfo) => a.pid - b.pid,
+          render: (pid: number) => (
+            <code style={{ 
+              fontSize: 12, 
+              fontWeight: 500,
+              padding: '4px 10px', 
+              background: '#f0f5ff', 
+              borderRadius: 6,
+              color: '#1890ff'
+            }}>
+              {pid}
+            </code>
+          )
+        },
+        {
+          title: (
+            <Space size="small">
+              <AppstoreOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>进程名称</span>
+            </Space>
+          ),
+          dataIndex: 'name',
+          key: 'name',
+          width: 250,
+          sorter: (a: ProcessInfo, b: ProcessInfo) => a.name.localeCompare(b.name),
+          render: (text: string, record: ProcessInfo) => (
+            <Tooltip title={text} placement="topLeft">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, maxWidth: '100%' }}>
+                <span style={{ fontWeight: 500, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text}</span>
+                {fileHandles.includes(record.pid) && (
+                  <Badge status="error" text="占用" style={{ fontSize: 11, flexShrink: 0 }} />
+                )}
+              </div>
+            </Tooltip>
+          )
+        },
+        {
+          title: (
+            <Space size="small">
+              <CiOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>CPU</span>
+            </Space>
+          ),
+          dataIndex: 'cpuUsage',
+          key: 'cpuUsage',
+          width: 130,
+          sorter: (a: ProcessInfo, b: ProcessInfo) => a.cpuUsage - b.cpuUsage,
+          render: (usage: number) => (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{ fontSize: 12, color: token.colorTextSecondary }}>使用率</span>
+                <span style={{ 
+                  fontSize: 13, 
+                  fontWeight: 500, 
+                  color: getStatusColor(usage) 
+                }}>
+                  {usage.toFixed(1)}%
+                </span>
+              </div>
+              <Progress
+                percent={Math.min(usage, 100)}
+                size="small"
+                showInfo={false}
+                strokeColor={getStatusColor(usage)}
+                strokeWidth={6}
+                trailColor="#f0f0f0"
+              />
+            </div>
+          )
+        },
+        {
+          title: (
+            <Space size="small">
+              <DatabaseOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>内存</span>
+            </Space>
+          ),
+          key: 'memoryUsage',
+          width: 160,
+          sorter: (a: ProcessInfo, b: ProcessInfo) => a.memoryBytes - b.memoryBytes,
+          render: (_: any, record: ProcessInfo) => {
+            const usagePercent = (record.memoryBytes / memoryTotal * 100)
+            return (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, color: token.colorTextSecondary }}>已用</span>
+                  <span style={{ 
+                    fontSize: 12, 
+                    fontWeight: 500, 
+                    color: getStatusColor(usagePercent) 
+                  }}>
+                    {formatBytes(record.memoryBytes)}
+                  </span>
+                </div>
+                <Progress
+                  percent={Math.min(usagePercent, 100)}
+                  size="small"
+                  showInfo={false}
+                  strokeColor={getStatusColor(usagePercent)}
+                  strokeWidth={6}
+                  trailColor="#f0f0f0"
+                />
+              </div>
+            )
+          }
+        },
+        {
+          title: (
+            <Space size="small">
+              <WifiOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>端口</span>
+            </Space>
+          ),
+          dataIndex: 'ports',
+          key: 'ports',
+          width: 200,
+          sorter: (a: ProcessInfo, b: ProcessInfo) => (a.ports?.length || 0) - (b.ports?.length || 0),
+          render: (ports: number[], record: ProcessInfo) => {
+            if (!ports || ports.length === 0) {
+              return <Text type="secondary" style={{ fontSize: 12 }}>-</Text>
+            }
+            
+            const isExpanded = expandedPorts.has(record.pid)
+            const displayPorts = isExpanded ? ports : ports.slice(0, 5)
+            
+            return (
+              <div>
+                <Space size="small" wrap>
+                  {displayPorts.map(port => (
+                    <Tag 
+                      key={port} 
+                      color="blue" 
+                      style={{ 
+                        fontSize: 11, 
+                        padding: '3px 8px',
+                        borderRadius: 4,
+                        fontWeight: 500
+                      }}
+                    >
+                      {port}
+                    </Tag>
+                  ))}
+                </Space>
+                {ports.length > 5 && (
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={isExpanded ? <CloseCircleOutlined /> : <MoreOutlined />}
+                    onClick={() => togglePortExpand(record.pid)}
+                    style={{ padding: 0, marginLeft: 4, color: '#1890ff' }}
+                  >
+                    {isExpanded ? '收起' : `+${ports.length - 5}`}
+                  </Button>
+                )}
+              </div>
+            )
+          }
+        },
+        {
+          title: '操作',
+          key: 'action',
+          width: 80,
+          fixed: 'right' as const,
+          render: (_: any, record: ProcessInfo) => (
+            <Tooltip title="结束进程">
+              <Button
+                type="text"
+                danger
+                size="small"
+                icon={<DeleteOutlined />}
+                onClick={() => handleKillProcess(record.pid)}
+                style={{ fontSize: 13, padding: '4px 8px' }}
+              />
+            </Tooltip>
+          )
+        }
+      ]
     }
-  ]
+  }, [mergeByName, token, filteredProcesses, selectedPids, selectAll, expandedPorts, fileHandles, memoryTotal])
 
   const memoryUsed = systemInfo?.memory?.used || 0
   const memoryTotalBytes = systemInfo?.memory?.total || 1
@@ -694,6 +982,18 @@ export const ProcessTool: React.FC = () => {
                     allowClear
                     size="middle"
                   />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 8, padding: '4px 12px', background: '#f0f5ff', borderRadius: 8 }}>
+                    <MergeCellsOutlined style={{ color: '#1890ff', fontSize: 14 }} />
+                    <Text style={{ fontSize: 13 }}>合并同名进程</Text>
+                    <Switch
+                      checked={mergeByName}
+                      onChange={(checked) => { 
+                        setMergeByName(checked)
+                        setCurrentPage(1)
+                      }}
+                      size="small"
+                    />
+                  </div>
                 </div>
               )
             },
@@ -792,7 +1092,7 @@ export const ProcessTool: React.FC = () => {
           </div>
         )}
 
-        {filteredProcesses.length === 0 ? (
+        {displayProcesses.length === 0 ? (
           <Empty
             description={loading ? '加载中...' : '未找到匹配的进程'}
             image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -805,34 +1105,50 @@ export const ProcessTool: React.FC = () => {
             )}
           </Empty>
         ) : (
-          <Table
-            columns={columns}
-            dataSource={filteredProcesses}
-            rowKey="pid"
+          <Table<any>
+            columns={columns as any}
+            dataSource={displayProcesses as any[]}
+            rowKey={mergeByName ? 'key' : 'pid'}
             size="middle"
             loading={loading}
             pagination={{ 
-              pageSize: 15, 
+              current: currentPage,
+              pageSize: pageSize, 
+              onChange: (page, size) => { 
+                setCurrentPage(page)
+                setPageSize(size)
+              },
               showSizeChanger: true,
               showQuickJumper: true,
               showTotal: (total) => `共 ${total} 条记录`,
               style: { borderRadius: 8 }
             }}
-            scroll={{ y: 480, x: 900 }}
-            rowClassName={(record: ProcessInfo) => {
-              if (fileHandles.includes(record.pid)) {
-                return 'ant-table-row-highlight'
-              }
-              if (selectedPids.has(record.pid)) {
-                return 'ant-table-row-selected'
+            scroll={{ y: 480, x: 'max-content' }}
+            rowClassName={(record: any) => {
+              if (!mergeByName) {
+                if (fileHandles.includes(record.pid)) {
+                  return 'ant-table-row-highlight'
+                }
+                if (selectedPids.has(record.pid)) {
+                  return 'ant-table-row-selected'
+                }
               }
               return ''
             }}
-            onRow={(record) => ({
-              onClick: () => setSelectedProcess(record),
-              onDoubleClick: () => handleKillProcess(record.pid),
-              className: 'custom-table-row'
-            })}
+            onRow={(record: any) => {
+              if (mergeByName) {
+                return {
+                  className: 'custom-table-row',
+                  style: { cursor: 'default' }
+                }
+              }
+              return {
+                onClick: () => setSelectedProcess(record),
+                onDoubleClick: () => handleKillProcess(record.pid),
+                className: 'custom-table-row',
+                style: { cursor: 'pointer' }
+              }
+            }}
             style={{ borderRadius: 8 }}
             components={{
               header: {
