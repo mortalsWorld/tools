@@ -14,6 +14,8 @@ release
 config
 *.local
 .npmrc
+.env
+.env.*
 
 
 # Editor directories and files

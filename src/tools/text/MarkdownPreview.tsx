@@ -1,14 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { Card, Input, Row, Col, theme } from 'antd';
 import MarkdownIt from 'markdown-it';
+import DOMPurify from 'dompurify';
 import { useTheme } from '../../context/ThemeContext';
 
 const { TextArea } = Input;
 // 安全说明：
 // 1. html: false 禁用原始 HTML 渲染，防止 XSS 攻击
 // 2. 用户输入的 Markdown 只渲染为纯文本格式，所有 HTML 标签都会被转义
-// 3. 即使使用 dangerouslySetInnerHTML，由于 html: false，不会产生 XSS 风险
-// 4. 如需支持原始 HTML，必须先使用 DOMPurify 等库进行 XSS 过滤
+// 3. 使用 DOMPurify 对 markdown-it 输出进行二次过滤，作为纵深防御措施
+// 4. 即使 markdown-it 配置变更或出现漏洞，DOMPurify 仍能阻止 XSS 攻击
 const md = new MarkdownIt({
   html: false,  // 关键安全设置：禁止渲染原始 HTML，防止 XSS
   breaks: true,
@@ -21,7 +22,9 @@ export const MarkdownPreview: React.FC = () => {
   const { token } = theme.useToken();
 
   const html = useMemo(() => {
-    return md.render(markdown);
+    // 安全最佳实践：使用 DOMPurify 对 markdown-it 输出进行二次过滤
+    // 即使 markdown-it 配置了 html: false，仍添加 DOMPurify 作为纵深防御
+    return DOMPurify.sanitize(md.render(markdown));
   }, [markdown]);
 
   const isDark = appTheme === 'dark';

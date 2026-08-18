@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:tauri": "tauri dev",
     "build": "tsc && vite build",
-    "build:tauri": "tsc && vite build && tauri build",
+    "build:tauri": "npm ci && tsc && vite build && tauri build",
     "lint": "echo 'ESLint skipped due to version compatibility'",
     "preview": "vite preview"
   },
@@ -21,6 +21,7 @@
     "@types/markdown-it": "^14.1.2",
     "antd": "^6.4.4",
     "build": "^0.1.4",
+    "dompurify": "^3.4.13",
     "highlight.js": "^11.11.1",
     "markdown-it": "^14.2.0",
     "react": "^19.0.0",
@@ -29,6 +30,7 @@
   "devDependencies": {
     "@eslint/js": "^9.0.0",
     "@tauri-apps/cli": "^2.11.4",
+    "@types/dompurify": "^3.0.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
