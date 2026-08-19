@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, Row, Col, Descriptions, Button, message, Alert, Tag, Collapse, theme } from 'antd';
 import { ReloadOutlined, GlobalOutlined, EnvironmentOutlined, WifiOutlined, HomeOutlined } from '@ant-design/icons';
 const { Panel } = Collapse;
@@ -25,6 +25,11 @@ export const NetworkTool: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [ipError, setIpError] = useState<string | null>(null);
+  const [ipv6ActiveKey, setIpv6ActiveKey] = useState<string[]>([]);
+  const [panelHeight, setPanelHeight] = useState<number>(0);
+  const ipv4Ref = useRef<HTMLDivElement>(null);
+  const ipv6Ref = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const fetchIPInfo = async (isManualRefresh = false) => {
     if (isManualRefresh || !initialLoadDone) {
@@ -92,6 +97,8 @@ export const NetworkTool: React.FC = () => {
             ipv4: info.ipv4 || [],
             ipv6: info.ipv6 || [],
           });
+          // 控制 Collapse 展开状态：≤3 个时默认展开，>3 个时默认折叠
+          setIpv6ActiveKey((info.ipv6?.length ?? 0) <= 3 ? ['ipv6-panel'] : []);
           return;
         }
       }
@@ -139,6 +146,8 @@ export const NetworkTool: React.FC = () => {
     }
     
     setLocalNetworkInfo(localIPs);
+    // 控制 Collapse 展开状态
+    setIpv6ActiveKey(localIPs.ipv6.length <= 3 ? ['ipv6-panel'] : []);
   };
 
   const isPublicIP = (ip: string): boolean => {
@@ -197,6 +206,69 @@ export const NetworkTool: React.FC = () => {
       mounted = false;
     };
   }, []);
+
+  // 同步两个面板高度（使用requestAnimationFrame优化性能）
+  useEffect(() => {
+    let rafId: number | null = null;
+    let lastHeight = 0;
+
+    const syncHeight = () => {
+      if (ipv4Ref.current && ipv6Ref.current) {
+        const ipv4Height = ipv4Ref.current.scrollHeight;
+        const ipv6Height = ipv6Ref.current.scrollHeight;
+        const maxHeight = Math.max(ipv4Height, ipv6Height, 60);
+        
+        // 只在高度变化超过2px时才更新，避免抖动
+        if (Math.abs(maxHeight - lastHeight) > 2) {
+          lastHeight = maxHeight;
+          setPanelHeight(maxHeight);
+        }
+      }
+    };
+
+    // 使用requestAnimationFrame延迟执行，避免与折叠动画冲突
+    const scheduleSync = () => {
+      if (rafId === null) {
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          syncHeight();
+        });
+      }
+    };
+
+    // 初始同步
+    scheduleSync();
+
+    // 延迟300ms后再次同步（等待折叠动画完成）
+    const timer = setTimeout(scheduleSync, 300);
+
+    // 使用ResizeObserver监听尺寸变化（节流处理）
+    let observerTimer: number | null = null;
+    const observerCallback = () => {
+      if (observerTimer !== null) {
+        clearTimeout(observerTimer);
+      }
+      observerTimer = window.setTimeout(() => {
+        observerTimer = null;
+        scheduleSync();
+      }, 100);
+    };
+
+    const observer = new ResizeObserver(observerCallback);
+    if (ipv4Ref.current) observer.observe(ipv4Ref.current);
+    if (ipv6Ref.current) observer.observe(ipv6Ref.current);
+
+    // 响应窗口resize
+    window.addEventListener('resize', scheduleSync);
+
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      if (observerTimer !== null) clearTimeout(observerTimer);
+      clearTimeout(timer);
+      observer.disconnect();
+      window.removeEventListener('resize', scheduleSync);
+    };
+  }, [localNetworkInfo, ipv6ActiveKey]);
 
   const handleRefresh = () => {
     fetchIPInfo(true);
@@ -284,64 +356,85 @@ export const NetworkTool: React.FC = () => {
         }
         style={{ marginTop: '16px' }}
       >
-        <Row gutter={[16, 16]}>
-          <Col xs={24} md={12}>
-            <div style={{ wordBreak: 'break-all' }}>
-              <h4 style={{ marginBottom: '12px', fontWeight: 500 }}>IPv4 地址</h4>
-              <div style={{ border: '1px solid #e8e8e8', borderRadius: '6px', padding: '12px' }}>
-                {localNetworkInfo.ipv4.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {localNetworkInfo.ipv4.map((ip, index) => (
-                      <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <span style={{ color: '#666', fontSize: '13px', minWidth: '80px' }}>内网 IP {index + 1}:</span>
-                        <Tag color="blue">{ip}</Tag>
-                        {isPrivateIP(ip) && <Tag color="green">私有IP</Tag>}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <Alert message="未能检测到内网IPv4地址" type="info" showIcon style={{ marginBottom: 0 }} />
-                )}
-              </div>
+        <Row ref={containerRef} gutter={[16, 16]} style={{ display: 'flex', flexWrap: 'wrap' }}>
+          <Col xs={24} md={12} style={{ display: 'flex', flexDirection: 'column' }}>
+            <h4 style={{ marginBottom: '12px', fontWeight: 500 }}>IPv4 地址</h4>
+            <div 
+              ref={ipv4Ref}
+              style={{ 
+                border: '1px solid #e8e8e8', 
+                borderRadius: '6px', 
+                padding: '12px', 
+                width: '100%',
+                boxSizing: 'border-box',
+                height: panelHeight > 0 ? `${panelHeight}px` : 'auto',
+                overflow: 'hidden',
+                transition: 'height 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+              }}
+            >
+              {localNetworkInfo.ipv4.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {localNetworkInfo.ipv4.map((ip, index) => (
+                    <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ color: '#666', fontSize: '13px', minWidth: '80px' }}>内网 IP {index + 1}:</span>
+                      <Tag color="blue">{ip}</Tag>
+                      {isPrivateIP(ip) && <Tag color="green">私有IP</Tag>}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <Alert message="未能检测到内网IPv4地址" type="info" showIcon style={{ marginBottom: 0 }} />
+              )}
             </div>
           </Col>
-          <Col xs={24} md={12}>
-            <div style={{ wordBreak: 'break-all' }}>
-              <h4 style={{ marginBottom: '12px', fontWeight: 500 }}>IPv6 地址</h4>
-              <div style={{ border: '1px solid #e8e8e8', borderRadius: '6px', padding: '12px' }}>
-                {localNetworkInfo.ipv6.length > 0 ? (
-                  <Collapse 
-                    defaultActiveKey={localNetworkInfo.ipv6.length <= 3 ? ['ipv6-panel'] : []}
-                    ghost
-                    style={{ background: 'transparent', border: 'none' }}
+          <Col xs={24} md={12} style={{ display: 'flex', flexDirection: 'column' }}>
+            <h4 style={{ marginBottom: '12px', fontWeight: 500 }}>IPv6 地址</h4>
+            <div 
+              ref={ipv6Ref}
+              style={{ 
+                border: '1px solid #e8e8e8', 
+                borderRadius: '6px', 
+                padding: '12px', 
+                width: '100%',
+                boxSizing: 'border-box',
+                height: panelHeight > 0 ? `${panelHeight}px` : 'auto',
+                overflow: 'hidden',
+                transition: 'height 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+              }}
+            >
+              {localNetworkInfo.ipv6.length > 0 ? (
+                <Collapse 
+                  activeKey={ipv6ActiveKey}
+                  onChange={(keys) => setIpv6ActiveKey(Array.isArray(keys) ? keys : [keys])}
+                  ghost
+                  style={{ background: 'transparent', border: 'none' }}
+                >
+                  <Panel 
+                    header={`显示 ${localNetworkInfo.ipv6.length} 个 IPv6 地址`} 
+                    key="ipv6-panel"
+                    style={{ border: 'none' }}
+                    extra={localNetworkInfo.ipv6.length > 3 ? null : undefined}
                   >
-                    <Panel 
-                      header={`显示 ${localNetworkInfo.ipv6.length} 个 IPv6 地址`} 
-                      key="ipv6-panel"
-                      style={{ border: 'none' }}
-                      extra={localNetworkInfo.ipv6.length > 3 ? null : undefined}
-                    >
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', wordBreak: 'break-all' }}>
-                        {localNetworkInfo.ipv6.map((ip, index) => (
-                          <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: '4px', wordBreak: 'break-all' }}>
-                            <span style={{ color: token.colorTextSecondary, fontSize: '13px' }}>IPv6 {index + 1}:</span>
-                            <code style={{ 
-                              wordBreak: 'break-all', 
-                              padding: '4px 8px', 
-                              background: token.colorBgContainer, 
-                              borderRadius: '4px', 
-                              fontSize: '12px',
-                              display: 'block'
-                            }}>{ip}</code>
-                          </div>
-                        ))}
-                      </div>
-                    </Panel>
-                  </Collapse>
-                ) : (
-                  <Alert message="未能检测到IPv6地址" type="info" showIcon style={{ marginBottom: 0 }} />
-                )}
-              </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', wordBreak: 'break-all' }}>
+                      {localNetworkInfo.ipv6.map((ip, index) => (
+                        <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: '4px', wordBreak: 'break-all' }}>
+                          <span style={{ color: token.colorTextSecondary, fontSize: '13px' }}>IPv6 {index + 1}:</span>
+                          <code style={{ 
+                            wordBreak: 'break-all', 
+                            padding: '4px 8px', 
+                            background: token.colorBgContainer, 
+                            borderRadius: '4px', 
+                            fontSize: '12px',
+                            display: 'block'
+                          }}>{ip}</code>
+                        </div>
+                      ))}
+                    </div>
+                  </Panel>
+                </Collapse>
+              ) : (
+                <Alert message="未能检测到IPv6地址" type="info" showIcon style={{ marginBottom: 0 }} />
+              )}
             </div>
           </Col>
         </Row>

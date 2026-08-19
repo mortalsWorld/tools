@@ -271,6 +271,7 @@ export const ProcessTool: React.FC = () => {
       if (existing) {
         existing.count++
         existing.pids.push(p.pid)
+        // CPU使用率累加，因为多个同名进程可能运行在不同的CPU核心上
         existing.totalCpu += p.cpuUsage
         existing.totalMemoryBytes += p.memoryBytes
         existing.processes.push(p)

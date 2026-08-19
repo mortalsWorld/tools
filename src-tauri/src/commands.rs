@@ -583,6 +583,9 @@ pub async fn get_processes() -> Vec<ProcessInfo> {
     tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
     system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
 
+    // 获取逻辑处理器数量，用于归一化CPU使用率
+    let logical_cpus = system.cpus().len().max(1) as f64;
+
     let pid_ports = get_pid_ports();
     let total_processes = system.processes().len();
     let mut matched_count = 0;
@@ -595,12 +598,15 @@ pub async fn get_processes() -> Vec<ProcessInfo> {
             if !ports.is_empty() {
                 matched_count += 1;
             }
+            // cpu_usage() 返回值范围是 0.0 到 100.0 * CPU核心数
+            // 需要除以逻辑处理器数量，归一化到 0-100%
+            let cpu_usage = (process.cpu_usage() as f64) / logical_cpus;
             ProcessInfo {
                 pid: pid.as_u32(),
                 name: process.name().to_string_lossy().to_string(),
                 memory: format_bytes(memory_bytes),
                 memory_bytes,
-                cpu_usage: process.cpu_usage() as f64,
+                cpu_usage,
                 ports,
             }
         })
@@ -713,6 +719,11 @@ fn get_pid_ports() -> std::collections::HashMap<u32, Vec<u16>> {
 pub async fn get_system_info() -> SystemInfo {
     let mut system = sysinfo::System::new_all();
     system.refresh_all();
+    
+    // 需要显式刷新CPU数据，global_cpu_usage() 依赖 refresh_cpu_all()
+    system.refresh_cpu_all();
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    system.refresh_cpu_all();
     
     let cpu_info = CpuInfo {
         name: system.cpus().first()
