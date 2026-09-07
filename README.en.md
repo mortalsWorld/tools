@@ -13,7 +13,7 @@ A modern general-purpose tool collection desktop application, built with Tauri 2
 - **Welcome** - Application introduction and quick access
 
 ### Text Processing
-- **Code Formatter** - JSON/XML formatting and minification
+- **Code Formatter** - JSON/XML formatting and minification, support removing # and // comments
 - **Markdown Preview** - Real-time Markdown preview and editing
 - **Regex Tester** - Regular expression testing with real-time highlighting
 
@@ -31,13 +31,14 @@ A modern general-purpose tool collection desktop application, built with Tauri 2
 - **Web Opener** - Quick access to frequently visited websites, supports group management and drag-to-sort
 
 ### Network
-- **Network Info** - View local network IP information and public IP
+- **Network Info** - View local network IP information and public IP, IPv4/IPv6 panel height auto-sync
 - **HTTP Test** - HTTP request testing tool
 - **IP Subnet Calculator** - IP subnet mask range conversion, supports CIDR and range formats
 - **IP Lookup** - Batch IP lookup tool, supports multi-format subnet matching, IPv4/IPv6
 
 ### System
-- **Process Viewer** - View system processes, CPU, memory information
+- **Process Viewer** - View system processes, CPU, memory information, supports process merging by name and file lock query, CPU usage normalized (divided by logical processor count)
+- **RAID Calculator** - RAID disk array capacity calculation and comparison, supports RAID 0/1/5/6/10/50/60
 
 ### Security
 - **Password Manager** - Password generation and storage management, supports group management, drag-to-sort, and batch operations
@@ -56,10 +57,19 @@ A modern general-purpose tool collection desktop application, built with Tauri 2
 
 ## Security Features
 
-- ✅ **Password Encryption** - XOR encryption with local key storage
+- ✅ **Password Encryption** - AES-256-GCM encryption with local key storage
+- ✅ **XOR Backward Compatibility** - Auto-decrypt legacy XOR-encrypted data
+- ✅ **Auto Config Backup** - Manual/auto config backup and restore
 - ✅ **Global Shortcuts** - Quick show/hide window with keyboard shortcuts
 - ✅ **Window Behavior Control** - Support minimize to tray on close
 - ✅ **Auto Config Migration** - Automatically detect and migrate old Electron config on startup
+- ✅ **Path Validation** - All file operations use whitelist validation and path canonicalization
+- ✅ **CSP Policy** - Strict Content Security Policy, unsafe-inline removed, XSS prevention
+- ✅ **XSS Protection** - Markdown rendering uses DOMPurify for secondary HTML filtering
+- ✅ **Production Security** - DevTools disabled in production to prevent debugger leaks
+- ✅ **Sensitive File Protection** - .gitignore excludes .env and .env.* files
+- ✅ **Protocol Restriction** - File and link operations only allow http/https/mailto/tel protocols
+- ✅ **Secure Build** - Build scripts use npm ci for consistent dependency installation
 
 ## Project Structure
 
