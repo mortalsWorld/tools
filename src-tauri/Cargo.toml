@@ -2,9 +2,9 @@
 name = "app"
 version = "1.6.0"
 description = "工具箱 - 基于 Tauri 的轻量级通用工具集合"
-authors = ["you"]
-license = ""
-repository = ""
+authors = ["工具箱开发者"]
+license = "MIT"
+repository = "https://gitee.com/hongchenshijie/tools"
 edition = "2021"
 rust-version = "1.77.2"
 
@@ -52,5 +52,5 @@ opt-level = "z"
 lto = true
 codegen-units = 1
 panic = "abort"
-strip = true
+strip = "debuginfo"
 incremental = false
