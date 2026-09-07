@@ -2,3 +2,6 @@
 # will have compiled files and executables
 /target/
 /gen/schemas
+
+# NSIS build tools (downloaded automatically during build)
+/tools/

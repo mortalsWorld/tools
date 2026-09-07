@@ -17,6 +17,9 @@ config
 .env
 .env.*
 
+# Build output
+package/
+
 
 # Editor directories and files
 .vscode/*
