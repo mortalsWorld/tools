@@ -40,6 +40,9 @@
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
       "timestampUrl": "http://timestamp.digicert.com",
+      "nsis": {
+        "installMode": "perMachine"
+      },
       "wix": {
         "language": ["zh-CN"]
       }
