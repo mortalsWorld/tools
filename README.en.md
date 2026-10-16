@@ -24,7 +24,8 @@ A modern general-purpose tool collection desktop application, built with Tauri 2
 - **Date/Time Converter** - Timestamp and date format conversion
 
 ### File Search
-- **File Search** - Local file fast search tool
+- **File Search** - Local file fast search with per-directory in-memory index, supporting fuzzy matching, boolean logic and query tokens (`!` exclude, `^` prefix, `$` suffix, `'` exact, `*`/`?` wildcards, `:@class`, `:S-` sort, drive scoping, etc.), with clickable column sorting by name/type/size
+- **Windows Settings Lookup** - Built-in catalog of Windows settings pages, Control Panel items and system tools, with keyword jump to the target UI
 
 ### Quick Tools
 - **File Launcher** - Quick access to frequently used files and directories, supports group management and drag-to-sort

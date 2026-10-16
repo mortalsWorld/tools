@@ -72,6 +72,57 @@ class TauriAPI {
     return invoke('search_files', { directory, pattern, limit });
   }
 
+  /** 高级文件搜索：支持模糊匹配、布尔逻辑与查询标记，并使用目录级内存索引加速 */
+  async searchFilesAdvanced(
+    directory: string,
+    query: string,
+    limit?: number,
+    refresh?: boolean,
+    sortBy?: string,
+    sortDesc?: boolean
+  ): Promise<{
+    results: {
+      path: string;
+      name: string;
+      ext: string;
+      isDir: boolean;
+      size: number;
+      modified: number;
+      score: number;
+    }[];
+    indexedCount: number;
+    fromCache: boolean;
+    elapsedMs: number;
+    warnings: string[];
+  }> {
+    return invoke('search_files_advanced', {
+      directory,
+      query,
+      limit,
+      refresh,
+      sortBy,
+      sortDesc,
+    });
+  }
+
+  /** 清空文件索引缓存 */
+  async clearFileIndex(directory?: string): Promise<boolean> {
+    return invoke('clear_file_index', { directory });
+  }
+
+  /** 检索 Windows 自带设置项与系统工具 */
+  async searchWindowsSettings(
+    keyword: string,
+    limit?: number
+  ): Promise<{ name: string; uri: string; category: string }[]> {
+    return invoke('search_windows_settings', { keyword, limit });
+  }
+
+  /** 打开 Windows 设置项 */
+  async openWindowsSetting(uri: string): Promise<void> {
+    return invoke('open_windows_setting', { uri });
+  }
+
   async openFile(path: string): Promise<void> {
     return invoke('open_file', { path });
   }

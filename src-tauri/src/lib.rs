@@ -1,6 +1,7 @@
 #![allow(linker_messages)]
 
 pub mod commands;
+pub mod file_search;
 
 use std::sync::Mutex;
 

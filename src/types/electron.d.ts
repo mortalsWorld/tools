@@ -22,11 +22,47 @@ export interface SystemInfo {
   };
 }
 
+export interface SearchHit {
+  path: string;
+  name: string;
+  /** 小写扩展名（含点号），目录为空字符串 */
+  ext: string;
+  isDir: boolean;
+  size: number;
+  modified: number;
+  score: number;
+}
+
+export interface SearchResponse {
+  results: SearchHit[];
+  indexedCount: number;
+  fromCache: boolean;
+  elapsedMs: number;
+  warnings: string[];
+}
+
+export interface WindowsSettingItem {
+  name: string;
+  uri: string;
+  category: string;
+}
+
 export interface IElectronAPI {
   platform: string;
   selectDirectory: () => Promise<string | null>;
   selectFile: () => Promise<string | null>;
   searchFiles: (directory: string, pattern: string) => Promise<string[]>;
+  searchFilesAdvanced: (
+    directory: string,
+    query: string,
+    limit?: number,
+    refresh?: boolean,
+    sortBy?: string,
+    sortDesc?: boolean
+  ) => Promise<SearchResponse>;
+  clearFileIndex: (directory?: string) => Promise<boolean>;
+  searchWindowsSettings: (keyword: string, limit?: number) => Promise<WindowsSettingItem[]>;
+  openWindowsSetting: (uri: string) => Promise<void>;
   openFile: (path: string) => Promise<void>;
   openUrl: (url: string) => Promise<void>;
   httpRequest: (options: {
