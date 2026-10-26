@@ -1,41 +1,55 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Row, Col, Divider, Empty, theme } from 'antd';
-import { 
-  ToolOutlined, 
-  CodeOutlined, 
-  ClockCircleOutlined, 
-  SearchOutlined,
-  ApiOutlined,
-  WifiOutlined,
-  FolderOpenOutlined,
-  AppstoreOutlined,
-  KeyOutlined,
-  ArrowRightOutlined,
-  SettingOutlined
-} from '@ant-design/icons';
+import { theme, Empty } from 'antd';
+import { motion } from 'framer-motion';
+import {
+  ArrowRight,
+  Code2,
+  Binary,
+  Clock,
+  Search,
+  FolderOpen,
+  Wifi,
+  LayoutGrid,
+  KeyRound,
+  Settings,
+  Star,
+  BookOpen,
+} from 'lucide-react';
 import { toolRegistry } from '../registry';
 import { Tool } from '../../types';
 
-const { Title, Paragraph } = Typography;
-
-interface ToolCategory {
+/** 分类入口定义（导航用） */
+interface CategoryEntry {
   id: string;
   name: string;
   description: string;
   icon: React.ReactNode;
-  gradient: string;
 }
 
-interface FavoriteTool {
-  id: string;
-  name: string;
-  description: string;
-  icon: React.ReactNode;
-  gradient: string;
+/** 根据当前小时返回问候语 */
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 6) return '夜深了';
+  if (h < 12) return '早上好';
+  if (h < 14) return '中午好';
+  if (h < 18) return '下午好';
+  return '晚上好';
 }
+
+const CATEGORIES: CategoryEntry[] = [
+  { id: 'code-formatter', name: '文本处理', description: '代码格式化、Markdown 预览、正则测试', icon: <Code2 size={20} /> },
+  { id: 'encoder', name: '编码转换', description: 'Base64、URL、Hex、Unicode 编解码', icon: <Binary size={20} /> },
+  { id: 'datetime', name: '时间日期', description: '时间戳转换、日期计算', icon: <Clock size={20} /> },
+  { id: 'file-search', name: '文件搜索', description: '本地文件快速搜索与系统设置直达', icon: <Search size={20} /> },
+  { id: 'file-launcher', name: '快捷工具', description: '文件快速启动、网页快速打开', icon: <FolderOpen size={20} /> },
+  { id: 'network', name: '网络工具', description: '网络信息、IP 子网计算、IP 查找', icon: <Wifi size={20} /> },
+  { id: 'process-tool', name: '系统工具', description: '进程查看、RAID 计算', icon: <LayoutGrid size={20} /> },
+  { id: 'password-tool', name: '密码管理', description: '密码生成与安全存储', icon: <KeyRound size={20} /> },
+  { id: 'settings', name: '应用设置', description: '主题、快捷键、工具栏自定义', icon: <Settings size={20} /> },
+];
 
 export const WelcomeTool: React.FC<{ onNavigate: (toolId: string) => void }> = ({ onNavigate }) => {
-  const [favoriteTools, setFavoriteTools] = useState<FavoriteTool[]>([]);
+  const [favoriteTools, setFavoriteTools] = useState<Tool[]>([]);
   const { token } = theme.useToken();
 
   useEffect(() => {
@@ -43,33 +57,13 @@ export const WelcomeTool: React.FC<{ onNavigate: (toolId: string) => void }> = (
       try {
         if ((window as any).electronAPI) {
           const config = await (window.electronAPI as any).getAppConfig();
-          if (config && config.favoriteTools && Array.isArray(config.favoriteTools)) {
-            const favorites: FavoriteTool[] = [];
-            const gradients = [
-              'linear-gradient(135deg, #ff9800 0%, #ff5722 100%)',
-              'linear-gradient(135deg, #4caf50 0%, #8bc34a 100%)',
-              'linear-gradient(135deg, #2196f3 0%, #64b5f6 100%)',
-              'linear-gradient(135deg, #9c27b0 0%, #ce93d8 100%)',
-              'linear-gradient(135deg, #e91e63 0%, #f48fb1 100%)',
-              'linear-gradient(135deg, #00bcd4 0%, #84ffff 100%)',
-              'linear-gradient(135deg, #ffeb3b 0%, #fff176 100%)',
-              'linear-gradient(135deg, #ff5722 0%, #ff9800 100%)',
-            ];
-            
-            config.favoriteTools.forEach((toolId: string, index: number) => {
-              const tool: Tool | undefined = toolRegistry.getTool(toolId);
-              if (tool) {
-                favorites.push({
-                  id: tool.id,
-                  name: tool.name,
-                  description: tool.description,
-                  icon: tool.icon,
-                  gradient: gradients[index % gradients.length]
-                });
-              }
+          if (config?.favoriteTools && Array.isArray(config.favoriteTools)) {
+            const tools: Tool[] = [];
+            config.favoriteTools.forEach((toolId: string) => {
+              const tool = toolRegistry.getTool(toolId);
+              if (tool) tools.push(tool);
             });
-            
-            setFavoriteTools(favorites);
+            setFavoriteTools(tools);
           }
         }
       } catch (error) {
@@ -80,318 +74,201 @@ export const WelcomeTool: React.FC<{ onNavigate: (toolId: string) => void }> = (
     loadFavorites();
 
     const cleanupFns: (() => void)[] = [];
-    
     if ((window as any).electronAPI?.onConfigChanged) {
       const cleanup = (window.electronAPI as any).onConfigChanged(() => {
         loadFavorites();
       });
       cleanupFns.push(cleanup);
     }
-
     return () => {
       cleanupFns.forEach(fn => fn());
     };
   }, []);
 
-  const categories: ToolCategory[] = [
-    {
-      id: 'code-formatter',
-      name: '文本处理',
-      description: '代码格式化、Markdown预览、正则表达式测试',
-      icon: <CodeOutlined style={{ fontSize: 28, color: '#fff' }} />,
-      gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-    },
-    {
-      id: 'encoder',
-      name: '编码转换',
-      description: 'Base64、URL、Hex、Unicode编解码',
-      icon: <ApiOutlined style={{ fontSize: 28, color: '#fff' }} />,
-      gradient: 'linear-gradient(135deg, #52c41a 0%, #73d13d 100%)'
-    },
-    {
-      id: 'datetime',
-      name: '时间日期',
-      description: '时间戳转换、日期计算',
-      icon: <ClockCircleOutlined style={{ fontSize: 28, color: '#fff' }} />,
-      gradient: 'linear-gradient(135deg, #fa8c16 0%, #ffa940 100%)'
-    },
-    {
-      id: 'file-search',
-      name: '文件搜索',
-      description: '本地文件快速搜索',
-      icon: <SearchOutlined style={{ fontSize: 28, color: '#fff' }} />,
-      gradient: 'linear-gradient(135deg, #f5222d 0%, #ff4d4f 100%)'
-    },
-    {
-      id: 'file-launcher',
-      name: '快捷工具',
-      description: '文件快速启动、网页快速打开',
-      icon: <FolderOpenOutlined style={{ fontSize: 28, color: '#fff' }} />,
-      gradient: 'linear-gradient(135deg, #722ed1 0%, #9254de 100%)'
-    },
-    {
-      id: 'network',
-      name: '网络工具',
-      description: '网络信息查看、IP子网计算、IP查找',
-      icon: <WifiOutlined style={{ fontSize: 28, color: '#fff' }} />,
-      gradient: 'linear-gradient(135deg, #13c2c2 0%, #36cfc9 100%)'
-    },
-    {
-      id: 'process-tool',
-      name: '系统工具',
-      description: '进程查看、系统设置',
-      icon: <AppstoreOutlined style={{ fontSize: 28, color: '#fff' }} />,
-      gradient: 'linear-gradient(135deg, #1890ff 0%, #40a9ff 100%)'
-    },
-    {
-      id: 'password-tool',
-      name: '密码管理',
-      description: '密码生成、安全存储',
-      icon: <KeyOutlined style={{ fontSize: 28, color: '#fff' }} />,
-      gradient: 'linear-gradient(135deg, #eb2f96 0%, #ff72c0 100%)'
-    },
-    {
-      id: 'settings',
-      name: '系统设置',
-      description: '应用程序配置、主题设置',
-      icon: <SettingOutlined style={{ fontSize: 28, color: '#fff' }} />,
-      gradient: 'linear-gradient(135deg, #536dfe 0%, #7c4dff 100%)'
-    }
-  ];
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <Card 
-        style={{ 
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          border: 'none',
-          borderRadius: 20,
-          color: '#fff',
-          boxShadow: '0 12px 40px rgba(102, 126, 234, 0.45)',
-          overflow: 'hidden'
-        }}
+    <div className="flex flex-col gap-6 max-w-5xl mx-auto">
+      {/* Hero 区：简洁问候，去掉彩色大横幅 */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="pt-2"
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 24, padding: '8px 0' }}>
-          <div style={{ 
-            width: 90, 
-            height: 90, 
-            background: 'rgba(255, 255, 255, 0.18)',
-            borderRadius: 24,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255, 255, 255, 0.2)'
-          }}>
-            <ToolOutlined style={{ fontSize: 44 }} />
-          </div>
-          <div>
-            <Title level={2} style={{ margin: 0, color: '#fff', fontSize: 28, fontWeight: 600 }}>
-              欢迎使用工具箱
-            </Title>
-            <Paragraph style={{ color: 'rgba(255, 255, 255, 0.88)', marginTop: 10, marginBottom: 0, fontSize: 15 }}>
-              一个纯离线的通用工具集合，无需网络即可使用
-            </Paragraph>
-          </div>
-        </div>
-      </Card>
+        <h1
+          className="!m-0 font-semibold"
+          style={{ fontSize: 26, color: token.colorText, letterSpacing: '-0.01em' }}
+        >
+          {greeting()}，欢迎使用工具箱
+        </h1>
+        <p className="!mt-2 !mb-0" style={{ color: token.colorTextSecondary, fontSize: 14 }}>
+          纯离线的通用工具集合，从下方选择一个工具开始
+        </p>
+      </motion.div>
 
-      <div>
-        <Title level={3} style={{ margin: 0, marginBottom: 16, fontSize: 20, fontWeight: 600 }}>我的收藏</Title>
+      {/* 收藏工具区 */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <Star size={15} style={{ color: token.colorTextTertiary }} />
+          <h2 className="!m-0 font-medium" style={{ fontSize: 14, color: token.colorText }}>
+            我的收藏
+          </h2>
+        </div>
         {favoriteTools.length > 0 ? (
-          <Row gutter={[12, 12]}>
-            {favoriteTools.map((tool) => (
-              <Col xs={24} sm={8} key={tool.id}>
-                <Card 
-              hoverable
-              style={{ 
-                borderRadius: 14, 
-                border: `1px solid ${token.colorBorder}`,
-                cursor: 'pointer',
-                transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-                height: '100%'
-              }}
-              styles={{ body: { padding: 18 } }}
-              onClick={() => onNavigate(tool.id)}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ 
-                  width: 44, 
-                  height: 44, 
-                  background: tool.gradient,
-                  borderRadius: 12,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)'
-                }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {favoriteTools.map((tool, i) => (
+              <motion.div
+                key={tool.id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04, duration: 0.25 }}
+                whileHover={{ y: -2 }}
+                onClick={() => onNavigate(tool.id)}
+                className="cursor-pointer rounded-xl p-4 flex items-center gap-3"
+                style={{
+                  background: token.colorBgElevated,
+                  border: `1px solid ${token.colorBorderSecondary}`,
+                  boxShadow: token.boxShadowTertiary,
+                }}
+              >
+                <div
+                  className="flex items-center justify-center rounded-lg shrink-0"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    background: 'rgb(99 102 241 / 0.1)',
+                    color: '#6366f1',
+                  }}
+                >
                   {tool.icon}
                 </div>
-                <div>
-                  <Title level={5} style={{ margin: 0, fontSize: 15, fontWeight: 500, color: token.colorTextHeading }}>{tool.name}</Title>
-                  <Paragraph style={{ marginTop: 2, marginRight: 0, marginBottom: 0, marginLeft: 0, color: token.colorTextSecondary, fontSize: 12 }}>
+                <div className="min-w-0">
+                  <div
+                    className="font-medium truncate"
+                    style={{ fontSize: 13, color: token.colorText }}
+                  >
+                    {tool.name}
+                  </div>
+                  <div
+                    className="truncate"
+                    style={{ fontSize: 12, color: token.colorTextTertiary }}
+                  >
                     {tool.description}
-                  </Paragraph>
+                  </div>
                 </div>
-              </div>
-                  <style>{`
-                    .ant-card-hoverable:hover {
-                      border-color: #667eea !important;
-                      box-shadow: 0 6px 24px rgba(102, 126, 234, 0.18) !important;
-                      transform: translateY(-3px);
-                    }
-                  `}</style>
-                </Card>
-              </Col>
+              </motion.div>
             ))}
-          </Row>
+          </div>
         ) : (
-          <Card 
-            style={{ 
-              borderRadius: 14, 
-              border: `1px dashed ${token.colorBorder}`,
-              background: token.colorBgContainer,
-              textAlign: 'center',
-              padding: '32px'
-            }}
+          <div
+            className="rounded-xl py-8 text-center"
+            style={{ border: `1px dashed ${token.colorBorder}` }}
           >
-            <Empty 
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={
-                <div>
-                  <p style={{ marginBottom: 8, color: token.colorText }}>暂无收藏的工具</p>
-                  <p style={{ fontSize: 13, color: token.colorTextSecondary }}>在设置中添加收藏工具，将显示在这里</p>
-                </div>
+                <span style={{ color: token.colorTextTertiary, fontSize: 13 }}>
+                  暂无收藏，可在设置中添加
+                </span>
               }
             />
-          </Card>
+          </div>
         )}
-      </div>
+      </section>
 
-      <Title level={3} style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>工具分类</Title>
-      <Row gutter={[16, 16]}>
-        {categories.map((category) => (
-          <Col xs={24} sm={12} lg={8} key={category.id}>
-            <Card 
-              hoverable
-              style={{ 
-                borderRadius: 16, 
-                border: `1px solid ${token.colorBorder}`,
-                cursor: 'pointer',
-                transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-                height: '100%'
+      {/* 分类导航区 */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <BookOpen size={15} style={{ color: token.colorTextTertiary }} />
+          <h2 className="!m-0 font-medium" style={{ fontSize: 14, color: token.colorText }}>
+            全部功能
+          </h2>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {CATEGORIES.map((cat, i) => (
+            <motion.div
+              key={cat.id}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 + i * 0.03, duration: 0.25 }}
+              whileHover={{ y: -2 }}
+              onClick={() => onNavigate(cat.id)}
+              className="cursor-pointer rounded-xl p-4 flex items-center gap-3 group"
+              style={{
+                background: token.colorBgElevated,
+                border: `1px solid ${token.colorBorderSecondary}`,
+                boxShadow: token.boxShadowTertiary,
               }}
-              styles={{ body: { padding: 24 } }}
-              onClick={() => onNavigate(category.id)}
             >
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 16
-              }}>
-                <div style={{ 
-                  width: 56, 
-                  height: 56, 
-                  background: category.gradient,
-                  borderRadius: 16,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)'
-                }}>
-                  {category.icon}
+              <div
+                className="flex items-center justify-center rounded-lg shrink-0"
+                style={{
+                  width: 38,
+                  height: 38,
+                  background: 'rgb(99 102 241 / 0.08)',
+                  color: '#6366f1',
+                }}
+              >
+                {cat.icon}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium" style={{ fontSize: 13, color: token.colorText }}>
+                  {cat.name}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Title level={4} style={{ margin: 0, fontSize: 16, fontWeight: 600, color: token.colorTextHeading }}>{category.name}</Title>
-                    <ArrowRightOutlined 
-                      style={{ 
-                        fontSize: 16, 
-                        color: token.colorTextSecondary,
-                        opacity: 0,
-                        transition: 'opacity 0.3s ease'
-                      }} 
-                    />
-                  </div>
-                  <Paragraph style={{ marginTop: 4, marginRight: 0, marginBottom: 0, marginLeft: 0, color: token.colorTextSecondary, fontSize: 13 }}>
-                    {category.description}
-                  </Paragraph>
+                <div
+                  className="truncate"
+                  style={{ fontSize: 12, color: token.colorTextTertiary }}
+                >
+                  {cat.description}
                 </div>
               </div>
-              <style>{`
-                .ant-card-hoverable:hover {
-                  border-color: #667eea !important;
-                  box-shadow: 0 8px 28px rgba(102, 126, 234, 0.22) !important;
-                  transform: translateY(-4px);
-                }
-                .ant-card-hoverable:hover .anticon-arrow-right {
-                  opacity: 1 !important;
-                }
-                .ant-card-hoverable:hover > div > div:first-child {
-                  transform: translateX(4px);
-                }
-                .ant-card-hoverable:hover > div > div:first-child > div:first-child {
-                  transform: scale(1.08);
-                  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.35);
-                }
-              `}</style>
-            </Card>
-          </Col>
-        ))}
-      </Row>
+              <ArrowRight
+                size={15}
+                className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                style={{ color: token.colorTextTertiary }}
+              />
+            </motion.div>
+          ))}
+        </div>
+      </section>
 
-      <Divider style={{ margin: '8px 0 24px', borderColor: token.colorBorder }} />
-
-      <Card style={{ borderRadius: 16, border: `1px solid ${token.colorBorder}`, background: token.colorBgContainer }}>
-        <Title level={3} style={{ marginBottom: 20, fontSize: 18, fontWeight: 600, color: token.colorTextHeading }}>使用说明</Title>
-        <Row gutter={[24, 24]}>
-          <Col xs={24} md={12}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-              <div style={{ 
-                width: 40, 
-                height: 40, 
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                borderRadius: 12,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
-              }}>
-                <span style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>1</span>
-              </div>
+      {/* 使用说明：极简两列 */}
+      <section
+        className="rounded-xl p-5 mt-2"
+        style={{
+          background: token.colorBgElevated,
+          border: `1px solid ${token.colorBorderSecondary}`,
+        }}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {[
+            { n: '1', t: '选择工具', d: '从左侧导航栏选择工具，或点击上方卡片快速跳转' },
+            { n: '2', t: '收藏工具', d: '在设置的工具栏自定义中收藏常用工具，方便快速访问' },
+          ].map(item => (
+            <div key={item.n} className="flex items-start gap-3">
+              <span
+                className="flex items-center justify-center rounded-full font-semibold shrink-0"
+                style={{
+                  width: 22,
+                  height: 22,
+                  fontSize: 12,
+                  background: 'rgb(99 102 241 / 0.1)',
+                  color: '#6366f1',
+                }}
+              >
+                {item.n}
+              </span>
               <div>
-                <Title level={5} style={{ margin: 0, fontSize: 14, fontWeight: 600, color: token.colorTextHeading }}>选择工具</Title>
-                <Paragraph style={{ marginTop: 6, marginRight: 0, marginBottom: 0, marginLeft: 0, color: token.colorTextSecondary, fontSize: 13 }}>
-                  从左侧导航栏选择需要使用的工具，或点击上方卡片快速跳转
-                </Paragraph>
+                <div className="font-medium" style={{ fontSize: 13, color: token.colorText }}>
+                  {item.t}
+                </div>
+                <div style={{ fontSize: 12, color: token.colorTextTertiary, marginTop: 2 }}>
+                  {item.d}
+                </div>
               </div>
             </div>
-          </Col>
-          <Col xs={24} md={12}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-              <div style={{ 
-                width: 40, 
-                height: 40, 
-                background: 'linear-gradient(135deg, #52c41a 0%, #73d13d 100%)',
-                borderRadius: 12,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                boxShadow: '0 4px 12px rgba(82, 196, 26, 0.3)'
-              }}>
-                <span style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>2</span>
-              </div>
-              <div>
-                <Title level={5} style={{ margin: 0, fontSize: 14, fontWeight: 600, color: token.colorTextHeading }}>收藏工具</Title>
-                <Paragraph style={{ marginTop: 6, marginRight: 0, marginBottom: 0, marginLeft: 0, color: token.colorTextSecondary, fontSize: 13 }}>
-                  在设置页面的工具栏自定义中收藏常用工具，方便快速访问
-                </Paragraph>
-              </div>
-            </div>
-          </Col>
-        </Row>
-      </Card>
+          ))}
+        </div>
+      </section>
     </div>
   );
 };

@@ -36,6 +36,12 @@ export default defineConfig({
                         if (id.includes('@tauri-apps')) {
                             return 'tauri';
                         }
+                        if (id.includes('framer-motion')) {
+                            return 'motion';
+                        }
+                        if (id.includes('lucide-react')) {
+                            return 'icons';
+                        }
                         return 'vendor';
                     }
                 }

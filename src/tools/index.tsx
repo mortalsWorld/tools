@@ -2,21 +2,21 @@ import { lazy } from 'react';
 import { toolRegistry } from './registry'
 import { WelcomeTool } from './examples/WelcomeTool'
 import {
-  HomeOutlined,
-  FileTextOutlined,
-  SwapOutlined,
-  ClockCircleOutlined,
-  SearchOutlined,
-  FolderOpenOutlined,
-  GlobalOutlined,
-  WifiOutlined,
-  AppstoreOutlined,
-  SafetyCertificateOutlined,
-  SettingOutlined,
-  CalculatorOutlined,
-  SendOutlined,
-  HddOutlined
-} from '@ant-design/icons'
+  House,
+  FileText,
+  ArrowLeftRight,
+  Clock,
+  Search,
+  FolderOpen,
+  Globe,
+  Wifi,
+  LayoutGrid,
+  ShieldCheck,
+  Settings,
+  Calculator,
+  Send,
+  HardDrive
+} from 'lucide-react'
 
 const lazyNamed = <T extends { [key: string]: React.ComponentType<any> }, K extends keyof T>(
   importFn: () => Promise<T>,
@@ -44,61 +44,61 @@ export const initializeTools = () => {
   toolRegistry.registerCategory({
     id: 'general',
     name: '通用工具',
-    icon: <HomeOutlined />
+    icon: <House size={15} />
   })
 
   toolRegistry.registerCategory({
     id: 'text',
     name: '文本处理',
-    icon: <FileTextOutlined />
+    icon: <FileText size={15} />
   })
 
   toolRegistry.registerCategory({
     id: 'encoding',
     name: '编码转换',
-    icon: <SwapOutlined />
+    icon: <ArrowLeftRight size={15} />
   })
 
   toolRegistry.registerCategory({
     id: 'datetime',
     name: '时间日期',
-    icon: <ClockCircleOutlined />
+    icon: <Clock size={15} />
   })
 
   toolRegistry.registerCategory({
     id: 'filesearch',
     name: '文件搜索',
-    icon: <SearchOutlined />
+    icon: <Search size={15} />
   })
 
   toolRegistry.registerCategory({
     id: 'tools',
     name: '快捷工具',
-    icon: <FolderOpenOutlined />
+    icon: <FolderOpen size={15} />
   })
 
   toolRegistry.registerCategory({
     id: 'network',
     name: '网络工具',
-    icon: <WifiOutlined />
+    icon: <Wifi size={15} />
   })
 
   toolRegistry.registerCategory({
     id: 'system',
     name: '系统工具',
-    icon: <AppstoreOutlined />
+    icon: <LayoutGrid size={15} />
   })
 
   toolRegistry.registerCategory({
     id: 'security',
     name: '安全工具',
-    icon: <SafetyCertificateOutlined />
+    icon: <ShieldCheck size={15} />
   })
 
   toolRegistry.registerCategory({
     id: 'settings',
     name: '设置',
-    icon: <SettingOutlined />
+    icon: <Settings size={15} />
   })
 
   toolRegistry.registerTool({
@@ -106,7 +106,7 @@ export const initializeTools = () => {
     name: '欢迎',
     description: '欢迎页面',
     category: 'general',
-    icon: <HomeOutlined />,
+    icon: <House size={15} />,
     component: WelcomeTool
   })
 
@@ -115,7 +115,7 @@ export const initializeTools = () => {
     name: '代码格式化',
     description: 'JSON/XML 代码格式化与压缩工具',
     category: 'text',
-    icon: <FileTextOutlined />,
+    icon: <FileText size={15} />,
     component: CodeFormatter
   })
 
@@ -124,7 +124,7 @@ export const initializeTools = () => {
     name: 'Markdown 预览',
     description: 'Markdown 实时预览',
     category: 'text',
-    icon: <FileTextOutlined />,
+    icon: <FileText size={15} />,
     component: MarkdownPreview
   })
 
@@ -133,7 +133,7 @@ export const initializeTools = () => {
     name: '正则表达式测试',
     description: '正则表达式测试工具，支持实时匹配高亮',
     category: 'text',
-    icon: <SearchOutlined />,
+    icon: <Search size={15} />,
     component: RegexTool
   })
 
@@ -142,7 +142,7 @@ export const initializeTools = () => {
     name: '编码解码',
     description: 'Base64/URL/Hex/Unicode 编码解码工具',
     category: 'encoding',
-    icon: <SwapOutlined />,
+    icon: <ArrowLeftRight size={15} />,
     component: EncoderTool
   })
 
@@ -151,7 +151,7 @@ export const initializeTools = () => {
     name: '时间日期转换',
     description: '时间戳与日期转换',
     category: 'datetime',
-    icon: <ClockCircleOutlined />,
+    icon: <Clock size={15} />,
     component: DateTimeTool
   })
 
@@ -160,7 +160,7 @@ export const initializeTools = () => {
     name: '文件搜索',
     description: '本地文件搜索工具',
     category: 'filesearch',
-    icon: <SearchOutlined />,
+    icon: <Search size={15} />,
     component: FileSearchTool
   })
 
@@ -169,7 +169,7 @@ export const initializeTools = () => {
     name: '文件快速启动',
     description: '快速访问常用文件和目录',
     category: 'tools',
-    icon: <FolderOpenOutlined />,
+    icon: <FolderOpen size={15} />,
     component: FileLauncherTool
   })
 
@@ -178,7 +178,7 @@ export const initializeTools = () => {
     name: '网页快速打开',
     description: '快速访问常用网站',
     category: 'tools',
-    icon: <GlobalOutlined />,
+    icon: <Globe size={15} />,
     component: WebOpenerTool
   })
 
@@ -187,7 +187,7 @@ export const initializeTools = () => {
     name: '网络信息',
     description: '查看网络IP信息',
     category: 'network',
-    icon: <WifiOutlined />,
+    icon: <Wifi size={15} />,
     component: NetworkTool
   })
 
@@ -196,7 +196,7 @@ export const initializeTools = () => {
     name: 'IP子网计算',
     description: 'IP子网掩码范围转换工具，支持CIDR、范围格式',
     category: 'network',
-    icon: <CalculatorOutlined />,
+    icon: <Calculator size={15} />,
     component: SubnetConverterTool
   })
 
@@ -205,7 +205,7 @@ export const initializeTools = () => {
     name: 'IP查找',
     description: '批量IP查找工具，支持多格式子网匹配、IPv4/IPv6',
     category: 'network',
-    icon: <SearchOutlined />,
+    icon: <Search size={15} />,
     component: IPLookupTool
   })
 
@@ -214,7 +214,7 @@ export const initializeTools = () => {
     name: 'HTTP测试',
     description: 'HTTP请求测试工具，支持GET/POST/PUT/DELETE等方法',
     category: 'network',
-    icon: <SendOutlined />,
+    icon: <Send size={15} />,
     component: HttpTestTool
   })
 
@@ -223,7 +223,7 @@ export const initializeTools = () => {
     name: '进程查看',
     description: '查看系统进程、CPU、内存、GPU信息',
     category: 'system',
-    icon: <AppstoreOutlined />,
+    icon: <LayoutGrid size={15} />,
     component: ProcessTool
   })
 
@@ -232,7 +232,7 @@ export const initializeTools = () => {
     name: 'RAID计算器',
     description: 'RAID磁盘阵列容量计算与对比工具',
     category: 'system',
-    icon: <HddOutlined />,
+    icon: <HardDrive size={15} />,
     component: RaidCalculator
   })
 
@@ -241,7 +241,7 @@ export const initializeTools = () => {
     name: '密码管理',
     description: '密码生成与存储管理工具',
     category: 'tools',
-    icon: <SafetyCertificateOutlined />,
+    icon: <ShieldCheck size={15} />,
     component: PasswordTool
   })
 
@@ -250,7 +250,7 @@ export const initializeTools = () => {
     name: '设置',
     description: '应用程序设置',
     category: 'settings',
-    icon: <SettingOutlined />,
+    icon: <Settings size={15} />,
     component: SettingsTool
   })
 };
