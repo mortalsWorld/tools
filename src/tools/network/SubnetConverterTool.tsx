@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Card, Input, Button, Space, message, Descriptions, Tag, Divider, Alert, Checkbox } from 'antd';
-import { ReloadOutlined, CalculatorOutlined, ExportOutlined, MergeCellsOutlined } from '@ant-design/icons';
+import { RotateCw, Calculator, Share, Merge } from 'lucide-react';
 
 const { TextArea } = Input;
 
@@ -709,16 +709,16 @@ export const SubnetConverterTool: React.FC = () => {
       <Card
         title={
           <span>
-            <CalculatorOutlined style={{ marginRight: '8px' }} />
+            <Calculator size={20} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
             IP子网掩码范围转换
           </span>
         }
         extra={
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={handleClear}>
+            <Button icon={<RotateCw size={14} />} onClick={handleClear}>
               清空
             </Button>
-            <Button type="primary" icon={<CalculatorOutlined />} onClick={handleConvert}>
+            <Button type="primary" icon={<Calculator size={14} />} onClick={handleConvert}>
               转换
             </Button>
           </Space>
@@ -760,7 +760,7 @@ export const SubnetConverterTool: React.FC = () => {
 
         <Space style={{ width: '100%', marginBottom: '16px' }}>
           <Checkbox checked={mergeEnabled} onChange={(e) => setMergeEnabled(e.target.checked)}>
-            <MergeCellsOutlined style={{ marginRight: '4px' }} />
+            <Merge size={14} style={{ marginRight: '4px' }} />
             合并去重（CIDR聚合）
           </Checkbox>
         </Space>
@@ -797,7 +797,7 @@ export const SubnetConverterTool: React.FC = () => {
               </div>
               <Button
                 size="small"
-                icon={<ExportOutlined />}
+                icon={<Share size={14} />}
                 onClick={handleExportCSV}
               >
                 导出 CSV
@@ -811,7 +811,7 @@ export const SubnetConverterTool: React.FC = () => {
                   <Space>
                     <span>{result.input}</span>
                     {result.isPrivate && <Tag color="green">私有IP</Tag>}
-                    <Tag color="blue">{result.ipClass}</Tag>
+                    <Tag color="processing">{result.ipClass}</Tag>
                   </Space>
                 }
                 style={{ marginBottom: '12px' }}
@@ -828,7 +828,7 @@ export const SubnetConverterTool: React.FC = () => {
                     <Tag>{result.totalAddresses.toLocaleString()}</Tag>
                   </Descriptions.Item>
                   <Descriptions.Item label="可用主机数">
-                    <Tag color="blue">{result.usableHosts.toLocaleString()}</Tag>
+                    <Tag color="processing">{result.usableHosts.toLocaleString()}</Tag>
                   </Descriptions.Item>
                 </Descriptions>
               </Card>

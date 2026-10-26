@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
-import { Card, Input, Select, Button, Table, message, Spin, Tabs, Tag, Tooltip, Empty, Switch, Collapse, Space } from 'antd';
-import { SendOutlined, ClockCircleOutlined, DeleteOutlined, PlusOutlined, CopyOutlined, LockOutlined, GlobalOutlined, UploadOutlined, FileOutlined } from '@ant-design/icons';
+import { Card, Input, Select, Button, Table, message, Spin, Tabs, Tag, Tooltip, Empty, Switch, Collapse, Space, theme } from 'antd';
+import { motion } from 'framer-motion';
+import { Send, Clock, Trash2, Plus, Copy, Lock, Globe, Upload, File } from 'lucide-react';
 
 const { Option } = Select;
 const { TabPane } = Tabs;
@@ -49,6 +50,7 @@ type ApiKeyLocation = 'header' | 'query';
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
 
 export const HttpTestTool: React.FC = () => {
+  const { token } = theme.useToken();
   const [method, setMethod] = useState('GET');
   const [url, setUrl] = useState('');
   const [headers, setHeaders] = useState<HeaderItem[]>([
@@ -358,15 +360,17 @@ export const HttpTestTool: React.FC = () => {
             <Option value={60000}>60秒</Option>
           </Select>
 
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
-            onClick={sendRequest}
-            loading={loading}
-            size="large"
-          >
-            发送
-          </Button>
+          <motion.div whileTap={{ scale: 0.97 }}>
+            <Button
+              type="primary"
+              icon={<Send size={14} />}
+              onClick={sendRequest}
+              loading={loading}
+              size="large"
+            >
+              发送
+            </Button>
+          </motion.div>
         </div>
       </Card>
 
@@ -380,7 +384,7 @@ export const HttpTestTool: React.FC = () => {
             size="small"
             bordered={false}
             footer={() => (
-              <Button type="dashed" icon={<PlusOutlined />} onClick={addQueryParam}>
+              <Button type="dashed" icon={<Plus size={14} />} onClick={addQueryParam}>
                 添加参数
               </Button>
             )}
@@ -416,7 +420,7 @@ export const HttpTestTool: React.FC = () => {
                   <Button
                     type="text"
                     danger
-                    icon={<DeleteOutlined />}
+                    icon={<Trash2 size={14} />}
                     onClick={() => removeQueryParam(record.key)}
                   />
                 </Tooltip>
@@ -433,7 +437,7 @@ export const HttpTestTool: React.FC = () => {
             size="small"
             bordered={false}
             footer={() => (
-              <Button type="dashed" icon={<PlusOutlined />} onClick={addHeader}>
+              <Button type="dashed" icon={<Plus size={14} />} onClick={addHeader}>
                 添加请求头
               </Button>
             )}
@@ -469,7 +473,7 @@ export const HttpTestTool: React.FC = () => {
                   <Button
                     type="text"
                     danger
-                    icon={<DeleteOutlined />}
+                    icon={<Trash2 size={14} />}
                     onClick={() => removeHeader(record.key)}
                   />
                 </Tooltip>
@@ -481,7 +485,7 @@ export const HttpTestTool: React.FC = () => {
         <Panel
           header={
             <span>
-              <LockOutlined style={{ marginRight: '8px' }} />
+              <Lock size={14} style={{ marginRight: '8px' }} />
               认证
             </span>
           }
@@ -558,7 +562,7 @@ export const HttpTestTool: React.FC = () => {
         <Panel
           header={
             <span>
-              <GlobalOutlined style={{ marginRight: '8px' }} />
+              <Globe size={14} style={{ marginRight: '8px' }} />
               代理设置
             </span>
           }
@@ -601,7 +605,7 @@ export const HttpTestTool: React.FC = () => {
                   </Space>
                 )}
 
-                <div style={{ color: '#999', fontSize: '12px' }}>
+                <div style={{ color: token.colorTextTertiary, fontSize: '12px' }}>
                   提示：浏览器环境下使用代理可能受 CORS 限制，实际代理功能需要在主进程中实现
                 </div>
               </>
@@ -636,7 +640,7 @@ export const HttpTestTool: React.FC = () => {
               size="small"
               bordered={false}
               footer={() => (
-                <Button type="dashed" icon={<UploadOutlined />} onClick={addUploadFile}>
+                <Button type="dashed" icon={<Upload size={14} />} onClick={addUploadFile}>
                   添加文件
                 </Button>
               )}
@@ -657,7 +661,7 @@ export const HttpTestTool: React.FC = () => {
                 title="文件名"
                 dataIndex="fileName"
                 render={(text) => (
-                  <span><FileOutlined style={{ marginRight: 4 }} />{text}</span>
+                  <span><File size={14} style={{ marginRight: 4 }} />{text}</span>
                 )}
               />
               <Table.Column
@@ -667,7 +671,7 @@ export const HttpTestTool: React.FC = () => {
                     <Button
                       type="text"
                       danger
-                      icon={<DeleteOutlined />}
+                      icon={<Trash2 size={14} />}
                       onClick={() => removeUploadFile(record.key)}
                     />
                   </Tooltip>
@@ -683,7 +687,7 @@ export const HttpTestTool: React.FC = () => {
               style={{ fontFamily: 'monospace, monospace', fontSize: '13px' }}
               autoSize={{ minRows: 4, maxRows: 8 }}
             />
-            <div style={{ color: '#999', fontSize: '12px' }}>
+            <div style={{ color: token.colorTextTertiary, fontSize: '12px' }}>
               提示：Multipart 模式下，附加字段会作为普通表单字段随文件一起上传
             </div>
           </Space>
@@ -705,7 +709,7 @@ export const HttpTestTool: React.FC = () => {
           />
         )}
         {method === 'GET' || method === 'HEAD' ? (
-          <div style={{ marginTop: '8px', color: '#999', fontSize: '12px' }}>
+          <div style={{ marginTop: '8px', color: token.colorTextTertiary, fontSize: '12px' }}>
             GET/HEAD 请求不支持请求体
           </div>
         ) : null}
@@ -719,8 +723,8 @@ export const HttpTestTool: React.FC = () => {
               <Tag color={isSuccess ? 'green' : 'red'} style={{ marginLeft: '8px' }}>
                 {response.status} {response.statusText}
               </Tag>
-              <span style={{ marginLeft: '8px', color: '#999' }}>
-                <ClockCircleOutlined /> {response.duration}ms
+              <span style={{ marginLeft: '8px', color: token.colorTextTertiary }}>
+                <Clock size={13} /> {response.duration}ms
               </span>
             </span>
           ) : (
@@ -730,7 +734,7 @@ export const HttpTestTool: React.FC = () => {
         style={{ flex: 1 }}
         extra={
           response?.body ? (
-            <Button type="text" icon={<CopyOutlined />} onClick={copyResponse}>
+            <Button type="text" icon={<Copy size={14} />} onClick={copyResponse}>
               复制
             </Button>
           ) : null
@@ -738,7 +742,7 @@ export const HttpTestTool: React.FC = () => {
       >
         <Spin spinning={loading}>
           {error ? (
-            <div style={{ color: '#ff4d4f', padding: '16px' }}>{error}</div>
+            <div style={{ color: token.colorError, padding: '16px' }}>{error}</div>
           ) : response ? (
             <Tabs defaultActiveKey="body" style={{ height: '100%' }}>
               <TabPane tab="响应头" key="headers">
@@ -774,7 +778,7 @@ export const HttpTestTool: React.FC = () => {
 
       {history.length > 0 && (
         <Card title="请求历史" style={{ marginTop: '16px' }} extra={
-          <Button type="text" danger icon={<DeleteOutlined />} onClick={clearHistory}>
+          <Button type="text" danger icon={<Trash2 size={14} />} onClick={clearHistory}>
             清空
           </Button>
         }>

@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { Card, Tooltip, Checkbox, Space, Button } from 'antd';
-import { HolderOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { GripVertical, Pencil, Trash2 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { BaseItem } from '../types';
@@ -65,12 +65,12 @@ export function SortableItemBase<T extends BaseItem>(props: SortableItemBaseProp
   // 默认 tooltip 渲染
   const defaultTooltip = (item: T) => (
     <div style={{ padding: 14, maxWidth: 500, wordWrap: 'break-word', overflowWrap: 'break-word' }}>
-      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10, color: '#333', wordBreak: 'break-all', lineHeight: 1.4 }}>
+      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10, color: token.colorText, wordBreak: 'break-all', lineHeight: 1.4 }}>
         {item.name}
       </div>
       {item.description && (
-        <div style={{ fontSize: 12, color: '#666', lineHeight: 1.5 }}>
-          <span style={{ fontWeight: 500, color: '#999', display: 'block', marginBottom: 3 }}>备注：</span>
+        <div style={{ fontSize: 12, color: token.colorTextSecondary, lineHeight: 1.5 }}>
+          <span style={{ fontWeight: 500, color: token.colorTextTertiary, display: 'block', marginBottom: 3 }}>备注：</span>
           <span style={{ display: 'block', wordBreak: 'break-all' }}>{item.description}</span>
         </div>
       )}
@@ -125,7 +125,7 @@ export function SortableItemBase<T extends BaseItem>(props: SortableItemBaseProp
               border: isSelected ? `2px solid ${token.colorPrimary}` : `1px solid ${token.colorBorderSecondary}`,
               backgroundColor: isSelected ? token.colorPrimaryBg : 'transparent',
             }}
-            bodyStyle={{ padding: 16, textAlign: 'center' }}
+            styles={{ body: { padding: 16, textAlign: 'center' } }}
             onClick={() => {
               if (showCheckbox && onToggleSelect) {
                 onToggleSelect(id);
@@ -135,8 +135,9 @@ export function SortableItemBase<T extends BaseItem>(props: SortableItemBaseProp
             }}
             actions={[
               <Tooltip title="拖拽排序">
-                <HolderOutlined
+                <GripVertical
                   key="drag"
+                  size={14}
                   {...attributes}
                   {...listeners}
                   style={{ cursor: 'grab' }}
@@ -155,10 +156,10 @@ export function SortableItemBase<T extends BaseItem>(props: SortableItemBaseProp
                 />
               </Tooltip>,
               <Tooltip title="编辑">
-                <EditOutlined key="edit" onClick={(e) => { e.stopPropagation(); onEdit(item); }} />
+                <Pencil key="edit" size={14} onClick={(e) => { e.stopPropagation(); onEdit(item); }} />
               </Tooltip>,
               <Tooltip title="删除">
-                <DeleteOutlined key="delete" onClick={(e) => { e.stopPropagation(); onDelete(item); }} />
+                <Trash2 key="delete" size={14} onClick={(e) => { e.stopPropagation(); onDelete(item); }} />
               </Tooltip>,
             ]}
           >
@@ -220,7 +221,8 @@ export function SortableItemBase<T extends BaseItem>(props: SortableItemBaseProp
             style={{ marginRight: 12 }}
           />
         )}
-        <HolderOutlined
+        <GripVertical
+          size={14}
           {...attributes}
           {...listeners}
           style={{
@@ -286,7 +288,7 @@ export function SortableItemBase<T extends BaseItem>(props: SortableItemBaseProp
             <Button
               type="text"
               size="small"
-              icon={<EditOutlined />}
+              icon={<Pencil size={14} />}
               onClick={(e) => { e.stopPropagation(); onEdit(item); }}
             />
           </Tooltip>
@@ -295,7 +297,7 @@ export function SortableItemBase<T extends BaseItem>(props: SortableItemBaseProp
               type="text"
               size="small"
               danger
-              icon={<DeleteOutlined />}
+              icon={<Trash2 size={14} />}
               onClick={(e) => { e.stopPropagation(); onDelete(item); }}
             />
           </Tooltip>

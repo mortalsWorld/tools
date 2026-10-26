@@ -13,18 +13,19 @@ import {
   Empty,
   Alert,
   Spin,
+  theme,
 } from 'antd';
 import type { InputRef, TableProps } from 'antd';
 import {
-  FolderOpenOutlined,
-  SearchOutlined,
-  FileOutlined,
-  FolderOutlined,
-  CopyOutlined,
-  ReloadOutlined,
-  SettingOutlined,
-  BulbOutlined,
-} from '@ant-design/icons';
+  FolderOpen,
+  Search,
+  File,
+  Folder,
+  Copy,
+  RotateCw,
+  Settings,
+  Lightbulb,
+} from 'lucide-react';
 
 const { Text } = Typography;
 
@@ -146,6 +147,7 @@ function formatTime(secs: number): string {
 }
 
 export const FileSearchTool: React.FC = () => {
+  const { token } = theme.useToken();
   const [source, setSource] = useState<SearchSource>('files');
 
   // 文件搜索状态
@@ -329,9 +331,9 @@ export const FileSearchTool: React.FC = () => {
       render: (_: unknown, item: SearchHit) => (
         <Space size={6}>
           {item.isDir ? (
-            <FolderOutlined style={{ color: '#faad14' }} />
+            <Folder size={14} style={{ color: token.colorWarning }} />
           ) : (
-            <FileOutlined style={{ color: '#1677ff' }} />
+            <File size={14} style={{ color: token.colorPrimary }} />
           )}
           <Text strong>{item.name}</Text>
         </Space>
@@ -400,7 +402,7 @@ export const FileSearchTool: React.FC = () => {
           <Button
             type="link"
             size="small"
-            icon={<CopyOutlined />}
+            icon={<Copy size={14} />}
             onClick={() => copyPath(item.path)}
           >
             复制
@@ -441,7 +443,7 @@ export const FileSearchTool: React.FC = () => {
             {items.map((item) => (
               <Tag
                 key={item.uri + item.name}
-                color="blue"
+                color="processing"
                 style={{ cursor: 'pointer', padding: '4px 10px', fontSize: 13 }}
                 onClick={() => openSetting(item)}
               >
@@ -461,8 +463,8 @@ export const FileSearchTool: React.FC = () => {
           value={source}
           onChange={(v) => setSource(v as SearchSource)}
           options={[
-            { label: '文件搜索', value: 'files', icon: <FileOutlined /> },
-            { label: '系统设置', value: 'settings', icon: <SettingOutlined /> },
+            { label: '文件搜索', value: 'files', icon: <File size={14} /> },
+            { label: '系统设置', value: 'settings', icon: <Settings size={14} /> },
           ]}
         />
 
@@ -473,15 +475,15 @@ export const FileSearchTool: React.FC = () => {
                 value={directory}
                 onChange={(e) => setDirectory(e.target.value)}
                 placeholder="选择或输入搜索目录"
-                prefix={<FolderOpenOutlined />}
+                prefix={<FolderOpen size={14} />}
                 style={{ flex: 1 }}
               />
-              <Button icon={<FolderOpenOutlined />} onClick={selectDirectory}>
+              <Button icon={<FolderOpen size={14} />} onClick={selectDirectory}>
                 选择目录
               </Button>
               <Tooltip title="重新扫描目录并重建索引（目录内容变化后使用）">
                 <Button
-                  icon={<ReloadOutlined />}
+                  icon={<RotateCw size={14} />}
                   disabled={!directory || isSearching}
                   onClick={() => runSearch(true)}
                 >
@@ -496,21 +498,21 @@ export const FileSearchTool: React.FC = () => {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="输入搜索内容，支持模糊匹配、! 排除、^ 前缀、$ 后缀、:@doc 等语法"
-                prefix={<SearchOutlined />}
+                prefix={<Search size={14} />}
                 onPressEnter={() => runSearch(false)}
                 style={{ flex: 1 }}
                 allowClear
               />
               <Tooltip title={showSyntax ? '收起语法说明' : '查看支持的查询语法'}>
                 <Button
-                  icon={<BulbOutlined />}
+                  icon={<Lightbulb size={14} />}
                   type={showSyntax ? 'primary' : 'default'}
                   onClick={() => setShowSyntax((v) => !v)}
                 />
               </Tooltip>
               <Button
                 type="primary"
-                icon={<SearchOutlined />}
+                icon={<Search size={14} />}
                 loading={isSearching}
                 onClick={() => runSearch(false)}
               >
@@ -588,11 +590,11 @@ export const FileSearchTool: React.FC = () => {
                   value={resultFilter}
                   onChange={(e) => setResultFilter(e.target.value)}
                   placeholder="在当前结果中筛选"
-                  prefix={<SearchOutlined />}
+                  prefix={<Search size={14} />}
                   style={{ width: 240 }}
                   allowClear
                 />
-                <Tag color="blue">
+                <Tag color="processing">
                   显示 {filteredHits.length} / {hits.length} 项
                 </Tag>
                 {response && (
@@ -619,14 +621,14 @@ export const FileSearchTool: React.FC = () => {
                 value={settingKeyword}
                 onChange={(e) => setSettingKeyword(e.target.value)}
                 placeholder="搜索 Windows 设置项与系统工具，如 蓝牙、网络、环境变量、任务管理器"
-                prefix={<SettingOutlined />}
+                prefix={<Settings size={14} />}
                 onPressEnter={() => runSettingsSearch(settingKeyword)}
                 style={{ flex: 1 }}
                 allowClear
               />
               <Button
                 type="primary"
-                icon={<SearchOutlined />}
+                icon={<Search size={14} />}
                 loading={isSearchingSettings}
                 onClick={() => runSettingsSearch(settingKeyword)}
               >

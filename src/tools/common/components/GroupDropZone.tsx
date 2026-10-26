@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { Badge } from 'antd';
-import { DownOutlined, RightOutlined, FolderOutlined } from '@ant-design/icons';
+import { ChevronDown, ChevronRight, Folder } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import { Group } from '../types';
 import { DRAG_TYPES } from '../utils/dragUtils';
@@ -96,16 +96,16 @@ export const GroupDropZone: React.FC<GroupDropZoneProps> = ({
               color: token.colorTextSecondary,
             }}
           >
-            {isExpanded ? <DownOutlined /> : <RightOutlined />}
+            {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           </span>
         )}
         {/* 没有子分组时显示空格占位 */}
         {!hasChildren && <span style={{ width: 14 }} />}
         
         {/* 文件夹图标 - 始终显示 */}
-        <FolderOutlined 
+        <Folder 
+          size={14}
           style={{ 
-            fontSize: 14, 
             color: token.colorTextSecondary,
             opacity: isSelected ? 1 : 0.6
           }} 

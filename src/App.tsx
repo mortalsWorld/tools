@@ -6,6 +6,9 @@ import { listen } from '@tauri-apps/api/event';
 import { Modal, Button } from 'antd';
 import { Wrench, LogOut, Minus } from 'lucide-react';
 import { motion } from 'framer-motion';
+import pkg from '../package.json';
+
+const APP_VERSION = pkg.version;
 
 initializeTools();
 
@@ -72,7 +75,7 @@ function App() {
               color: '#6366f1',
             }}
           >
-            v1.6.0
+            v{APP_VERSION}
           </span>
           <p className="!mt-3 !mb-0" style={{ fontSize: 13, opacity: 0.75 }}>
             纯离线的通用工具集合，无需网络即可使用

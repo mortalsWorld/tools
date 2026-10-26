@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Card, Input, Button, Space, message } from 'antd';
-import { CopyOutlined, ArrowRightOutlined } from '@ant-design/icons';
+import { Copy, ArrowRight, ArrowLeft } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const { TextArea } = Input;
 
@@ -56,7 +57,7 @@ export const HexTool: React.FC = () => {
             <Button
               type="text"
               size="small"
-              icon={<CopyOutlined />}
+              icon={<Copy size={14} />}
               onClick={copyText}
               style={{ marginLeft: 8 }}
             >
@@ -71,10 +72,12 @@ export const HexTool: React.FC = () => {
           />
         </div>
         <Space>
-          <Button type="primary" icon={<ArrowRightOutlined />} onClick={textToHex}>
-            文本 → Hex
-          </Button>
-          <Button icon={<ArrowRightOutlined rotate={180} />} onClick={hexToText}>
+          <motion.div whileTap={{ scale: 0.97 }} style={{ display: 'inline-flex' }}>
+            <Button type="primary" icon={<ArrowRight size={14} />} onClick={textToHex}>
+              文本 → Hex
+            </Button>
+          </motion.div>
+          <Button icon={<ArrowLeft size={14} />} onClick={hexToText}>
             Hex → 文本
           </Button>
         </Space>
@@ -84,7 +87,7 @@ export const HexTool: React.FC = () => {
             <Button
               type="text"
               size="small"
-              icon={<CopyOutlined />}
+              icon={<Copy size={14} />}
               onClick={copyHex}
               style={{ marginLeft: 8 }}
             >

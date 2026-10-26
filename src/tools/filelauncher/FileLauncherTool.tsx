@@ -15,18 +15,19 @@ import {
   Typography,
 } from 'antd';
 import {
-  PlusOutlined,
-  AppstoreOutlined,
-  UnorderedListOutlined,
-  EditOutlined,
-  SettingOutlined,
-  FolderOutlined,
-  FileOutlined,
-  UploadOutlined,
-  CloseOutlined,
-  SwapOutlined,
-  CheckOutlined,
-} from '@ant-design/icons';
+  Plus,
+  LayoutGrid,
+  List,
+  Pencil,
+  Settings,
+  Folder,
+  File,
+  Upload,
+  X,
+  ArrowLeftRight,
+  Check,
+} from 'lucide-react';
+import { motion } from 'framer-motion';
 import GroupManager from '../common/GroupManager';
 import {
   DndContext,
@@ -621,7 +622,7 @@ const FileLauncherTool: React.FC = () => {
           value={group.id}
           title={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <FolderOutlined />
+              <Folder size={14} />
               <span>{group.name}</span>
             </div>
           }
@@ -635,29 +636,29 @@ const FileLauncherTool: React.FC = () => {
   // ========== 渲染 SortableItemBase 的 tooltip ==========
   const renderTooltip = useCallback((item: FileItem) => (
     <div style={{ padding: 14, maxWidth: 500, wordWrap: 'break-word', overflowWrap: 'break-word' }}>
-      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10, color: '#333', wordBreak: 'break-all', lineHeight: 1.4 }}>
+      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10, color: token.colorText, wordBreak: 'break-all', lineHeight: 1.4 }}>
         {item.name}
       </div>
-      <div style={{ fontSize: 12, color: '#666', marginBottom: 6, lineHeight: 1.5 }}>
-        <span style={{ fontWeight: 500, color: '#999', display: 'block', marginBottom: 3 }}>路径：</span>
+      <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 6, lineHeight: 1.5 }}>
+        <span style={{ fontWeight: 500, color: token.colorTextTertiary, display: 'block', marginBottom: 3 }}>路径：</span>
         <span style={{ wordBreak: 'break-all', fontFamily: 'Consolas, Monaco, monospace', display: 'block' }}>{item.path}</span>
       </div>
-      <div style={{ fontSize: 12, color: '#666', marginBottom: 6, lineHeight: 1.5 }}>
-        <span style={{ fontWeight: 500, color: '#999' }}>类型：</span>
+      <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 6, lineHeight: 1.5 }}>
+        <span style={{ fontWeight: 500, color: token.colorTextTertiary }}>类型：</span>
         <span>{item.type === 'directory' ? '文件夹' : '文件'}</span>
       </div>
-      <div style={{ fontSize: 12, color: '#666', marginBottom: item.description ? 6 : 0, lineHeight: 1.5 }}>
-        <span style={{ fontWeight: 500, color: '#999' }}>分组：</span>
+      <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: item.description ? 6 : 0, lineHeight: 1.5 }}>
+        <span style={{ fontWeight: 500, color: token.colorTextTertiary }}>分组：</span>
         <span>{groups.find(g => g.id === item.group)?.name || item.group}</span>
       </div>
       {item.description && (
-        <div style={{ fontSize: 12, color: '#666', borderTop: '1px solid #eee', paddingTop: 8, marginTop: 8, lineHeight: 1.5 }}>
-          <span style={{ fontWeight: 500, color: '#999', display: 'block', marginBottom: 3 }}>备注：</span>
+        <div style={{ fontSize: 12, color: token.colorTextSecondary, borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 8, marginTop: 8, lineHeight: 1.5 }}>
+          <span style={{ fontWeight: 500, color: token.colorTextTertiary, display: 'block', marginBottom: 3 }}>备注：</span>
           <span style={{ display: 'block', wordBreak: 'break-all' }}>{item.description}</span>
         </div>
       )}
     </div>
-  ), [groups]);
+  ), [groups, token]);
 
   // ========== 渲染 SortableItemBase 的图标 ==========
   const renderIcon = useCallback((item: FileItem) => (
@@ -691,7 +692,7 @@ const FileLauncherTool: React.FC = () => {
   // ========== 渲染 SortableItemBase 的副标题 ==========
   const renderSubtitle = useCallback((item: FileItem) => (
     <>
-      {item.type === 'directory' ? <FolderOutlined /> : <FileOutlined />}
+      {item.type === 'directory' ? <Folder size={13} /> : <File size={13} />}
       <span style={{ marginLeft: 4 }}>{item.type === 'directory' ? '文件夹' : '文件'}</span>
     </>
   ), []);
@@ -730,7 +731,6 @@ const FileLauncherTool: React.FC = () => {
       theme={{
         token: {
           borderRadius: 8,
-          colorPrimary: '#1890ff',
         },
       }}
     >
@@ -772,7 +772,7 @@ const FileLauncherTool: React.FC = () => {
               <Tooltip title={isEditMode ? '退出编辑模式' : '进入编辑模式'}>
                 <Button
                   type={isEditMode ? 'primary' : 'default'}
-                  icon={<SwapOutlined />}
+                  icon={<ArrowLeftRight size={14} />}
                   onClick={() => {
                     setIsEditMode(!isEditMode);
                     if (isEditMode) {
@@ -788,7 +788,7 @@ const FileLauncherTool: React.FC = () => {
                 <>
                   <Tooltip title="全选">
                     <Button
-                      icon={<CheckOutlined />}
+                      icon={<Check size={14} />}
                       onClick={handleSelectAll}
                     >
                       全选
@@ -798,7 +798,7 @@ const FileLauncherTool: React.FC = () => {
                   <Tooltip title="移动到分组">
                     <Button
                       type="primary"
-                      icon={<CheckOutlined />}
+                      icon={<Check size={14} />}
                       disabled={selectedItemIds.size === 0}
                       onClick={handleOpenBatchMoveModal}
                     >
@@ -815,22 +815,24 @@ const FileLauncherTool: React.FC = () => {
                 buttonStyle="solid"
                 size="small"
               >
-                <Radio.Button value="grid"><AppstoreOutlined /></Radio.Button>
-                <Radio.Button value="list"><UnorderedListOutlined /></Radio.Button>
+                <Radio.Button value="grid"><LayoutGrid size={14} /></Radio.Button>
+                <Radio.Button value="list"><List size={14} /></Radio.Button>
               </Radio.Group>
 
               {/* 添加快捷方式 */}
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={handleAddItem}
-              >
-                添加快捷方式
-              </Button>
+              <motion.div whileTap={{ scale: 0.97 }}>
+                <Button
+                  type="primary"
+                  icon={<Plus size={14} />}
+                  onClick={handleAddItem}
+                >
+                  添加快捷方式
+                </Button>
+              </motion.div>
 
               {/* 分组管理 */}
               <Button
-                icon={<SettingOutlined />}
+                icon={<Settings size={14} />}
                 onClick={() => setIsGroupManagerVisible(true)}
               >
                 分组管理
@@ -886,7 +888,7 @@ const FileLauncherTool: React.FC = () => {
                   style={{ marginTop: 60 }}
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
                 >
-                  <Button type="primary" icon={<PlusOutlined />} onClick={handleAddItem}>
+                  <Button type="primary" icon={<Plus size={14} />} onClick={handleAddItem}>
                     添加快捷方式
                   </Button>
                 </Empty>
@@ -961,7 +963,7 @@ const FileLauncherTool: React.FC = () => {
                   const item = items.find(i => i.id === activeId);
                   if (item) {
                     return (
-                      <Card size="small" style={{ borderRadius: 12 }}>
+                      <Card size="small">
                         <div style={{ textAlign: 'center' }}>
                           <div style={{ fontSize: 32 }}>
                             {item.iconData ? (
@@ -985,7 +987,7 @@ const FileLauncherTool: React.FC = () => {
 
       {/* 添加快捷方式模态框 */}
       <Modal
-        title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><PlusOutlined /> 添加快捷方式</div>}
+        title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Plus size={16} /> 添加快捷方式</div>}
         open={isAddModalVisible}
         onOk={handleConfirmAdd}
         onCancel={() => setIsAddModalVisible(false)}
@@ -1018,8 +1020,8 @@ const FileLauncherTool: React.FC = () => {
               }))}
               buttonStyle="solid"
             >
-              <Radio.Button value="file"><FileOutlined /> 文件</Radio.Button>
-              <Radio.Button value="directory"><FolderOutlined /> 文件夹</Radio.Button>
+              <Radio.Button value="file"><File size={14} /> 文件</Radio.Button>
+              <Radio.Button value="directory"><Folder size={14} /> 文件夹</Radio.Button>
             </Radio.Group>
           </div>
 
@@ -1072,7 +1074,7 @@ const FileLauncherTool: React.FC = () => {
               <Space direction="vertical" style={{ flex: 1 }}>
                 <Button
                   type="primary"
-                  icon={<UploadOutlined />}
+                  icon={<Upload size={14} />}
                   onClick={() => handleUploadIcon(true)}
                 >
                   上传图标
@@ -1080,7 +1082,7 @@ const FileLauncherTool: React.FC = () => {
                 {newItem.iconData && (
                   <Button
                     danger
-                    icon={<CloseOutlined />}
+                    icon={<X size={14} />}
                     onClick={() => handleClearIcon(true)}
                   >
                     清除图标
@@ -1135,7 +1137,7 @@ const FileLauncherTool: React.FC = () => {
 
       {/* 编辑快捷方式模态框 */}
       <Modal
-        title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><EditOutlined /> 编辑快捷方式</div>}
+        title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Pencil size={16} /> 编辑快捷方式</div>}
         open={isEditModalVisible}
         onOk={handleConfirmEdit}
         onCancel={() => setIsEditModalVisible(false)}
@@ -1169,8 +1171,8 @@ const FileLauncherTool: React.FC = () => {
                 }) : null)}
                 buttonStyle="solid"
               >
-                <Radio.Button value="file"><FileOutlined /> 文件</Radio.Button>
-                <Radio.Button value="directory"><FolderOutlined /> 文件夹</Radio.Button>
+                <Radio.Button value="file"><File size={14} /> 文件</Radio.Button>
+                <Radio.Button value="directory"><Folder size={14} /> 文件夹</Radio.Button>
               </Radio.Group>
             </div>
 
@@ -1223,7 +1225,7 @@ const FileLauncherTool: React.FC = () => {
                 <Space direction="vertical" style={{ flex: 1 }}>
                   <Button
                     type="primary"
-                    icon={<UploadOutlined />}
+                    icon={<Upload size={14} />}
                     onClick={() => handleUploadIcon(false)}
                   >
                     上传图标
@@ -1231,7 +1233,7 @@ const FileLauncherTool: React.FC = () => {
                   {editingItem.iconData && (
                     <Button
                       danger
-                      icon={<CloseOutlined />}
+                      icon={<X size={14} />}
                       onClick={() => handleClearIcon(false)}
                     >
                       清除图标

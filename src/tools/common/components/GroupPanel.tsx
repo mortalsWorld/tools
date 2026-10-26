@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { Badge } from 'antd';
-import { GlobalOutlined } from '@ant-design/icons';
+import { Globe } from 'lucide-react';
 import { Group, BaseItem } from '../types';
 import { GroupItem } from './GroupItem';
 
@@ -120,7 +120,7 @@ export function GroupPanel<T extends BaseItem>(props: GroupPanelProps<T>): React
         onClick={() => setSelectedGroup('all')}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <GlobalOutlined />
+          <Globe size={14} />
           <span>全部</span>
         </div>
         <Badge

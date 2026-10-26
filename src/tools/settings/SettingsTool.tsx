@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Card, Form, Input, Button, Space, Table, message, Typography, Divider, Alert, Modal, Switch, InputNumber, Select, Collapse, theme } from 'antd'
-import { SaveOutlined, ReloadOutlined, FolderOpenOutlined, KeyOutlined, WarningOutlined, CheckCircleOutlined, CloseCircleFilled, UpOutlined, DownOutlined, EyeOutlined, EyeInvisibleOutlined, MenuOutlined, SaveOutlined as BackupOutlined, CloudUploadOutlined, HistoryOutlined, DeleteOutlined, PlayCircleOutlined, StarOutlined, StarFilled } from '@ant-design/icons'
+import { Save, RotateCw, FolderOpen, KeyRound, TriangleAlert, CircleCheck, CircleX, ChevronUp, ChevronDown, Eye, EyeOff, Menu, CloudUpload, History, Trash2, CirclePlay, Star } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { toolRegistry } from '../registry'
 const { Panel } = Collapse
 
@@ -714,7 +715,7 @@ export const SettingsTool: React.FC = () => {
         <Space size="small">
           <Button
             type="text"
-            icon={<PlayCircleOutlined />}
+            icon={<CirclePlay size={14} />}
             size="small"
             onClick={() => handleRestoreBackup(record.id)}
           >
@@ -723,7 +724,7 @@ export const SettingsTool: React.FC = () => {
           <Button
             type="text"
             danger
-            icon={<DeleteOutlined />}
+            icon={<Trash2 size={14} />}
             size="small"
             onClick={() => handleDeleteBackup(record.id)}
           >
@@ -747,7 +748,7 @@ export const SettingsTool: React.FC = () => {
       <Modal
         title={
           <Space>
-            <WarningOutlined style={{ color: '#faad14' }} />
+            <TriangleAlert size={16} style={{ color: token.colorWarning }} />
             <span>确认迁移配置目录</span>
           </Space>
         }
@@ -765,19 +766,19 @@ export const SettingsTool: React.FC = () => {
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-              <CloseCircleFilled style={{ color: '#ff4d4f', marginTop: 2 }} />
+              <CircleX size={16} style={{ color: token.colorError, marginTop: 2 }} />
               <div>
                 <Text type="secondary" style={{ fontSize: 12 }}>原配置目录</Text>
-                <p style={{ margin: 4, fontFamily: 'monospace', fontSize: 13, color: '#666' }}>
+                <p style={{ margin: 4, fontFamily: 'monospace', fontSize: 13, color: token.colorTextSecondary }}>
                   {originalConfigDir || '(默认目录)'}
                 </p>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-              <CheckCircleOutlined style={{ color: '#52c41a', marginTop: 2 }} />
+              <CircleCheck size={16} style={{ color: token.colorSuccess, marginTop: 2 }} />
               <div>
                 <Text type="secondary" style={{ fontSize: 12 }}>新配置目录</Text>
-                <p style={{ margin: 4, fontFamily: 'monospace', fontSize: 13, color: '#666' }}>
+                <p style={{ margin: 4, fontFamily: 'monospace', fontSize: 13, color: token.colorTextSecondary }}>
                   {form.getFieldValue('configDir') || '(未选择)'}
                 </p>
               </div>
@@ -795,14 +796,19 @@ export const SettingsTool: React.FC = () => {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Title level={4} style={{ margin: 0 }}>设置</Title>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: token.colorText }}>设置</h2>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: token.colorTextTertiary }}>管理应用配置、快捷键、工具栏与备份</p>
+          </div>
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={handleReset}>
+            <Button icon={<RotateCw size={14} />} onClick={handleReset}>
               重置
             </Button>
-            <Button type="primary" icon={<SaveOutlined />} onClick={handleSave}>
-              保存设置
-            </Button>
+            <motion.div whileTap={{ scale: 0.97 }}>
+              <Button type="primary" icon={<Save size={14} />} onClick={handleSave}>
+                保存设置
+              </Button>
+            </motion.div>
           </Space>
         </div>
 
@@ -824,8 +830,8 @@ export const SettingsTool: React.FC = () => {
                   form.setFieldsValue({ configDir: e.target.value })
                 }}
               />
-              <Button 
-                icon={<FolderOpenOutlined />}
+              <Button
+                icon={<FolderOpen size={14} />}
                 onClick={handleSelectDirectory}
               >
                 选择
@@ -895,7 +901,7 @@ export const SettingsTool: React.FC = () => {
       <Card 
         title={
           <Space>
-            <KeyOutlined />
+            <KeyRound size={20} />
             <span>快捷键设置</span>
             <Button 
               type="link" 
@@ -944,7 +950,7 @@ export const SettingsTool: React.FC = () => {
       <Card 
         title={
           <Space>
-            <MenuOutlined />
+            <Menu size={20} />
             <span>工具栏自定义</span>
             <Button 
               type="link" 
@@ -1003,14 +1009,14 @@ export const SettingsTool: React.FC = () => {
                     <Space size="small">
                       <Button
                         size="small"
-                        icon={<UpOutlined />}
+                        icon={<ChevronUp size={14} />}
                         onClick={() => handleCategoryMoveUp(categoryIndex)}
                         disabled={categoryIndex === 0}
                         title="分类上移"
                       />
                       <Button
                         size="small"
-                        icon={<DownOutlined />}
+                        icon={<ChevronDown size={14} />}
                         onClick={() => handleCategoryMoveDown(categoryIndex)}
                         disabled={categoryIndex === toolbarItems.length - 1}
                         title="分类下移"
@@ -1018,8 +1024,8 @@ export const SettingsTool: React.FC = () => {
                       <Switch
                         checked={category.visible}
                         onChange={(checked) => handleCategoryVisibilityChange(category.categoryId, checked)}
-                        checkedChildren={<EyeOutlined />}
-                        unCheckedChildren={<EyeInvisibleOutlined />}
+                        checkedChildren={<Eye size={12} />}
+                        unCheckedChildren={<EyeOff size={12} />}
                         title={category.visible ? '隐藏分类' : '显示分类'}
                         size="small"
                       />
@@ -1038,21 +1044,21 @@ export const SettingsTool: React.FC = () => {
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <span style={{ fontSize: 12, color: '#999', width: 24 }}>{index + 1}</span>
+                        <span style={{ fontSize: 12, color: token.colorTextTertiary, width: 24 }}>{index + 1}</span>
                         <span>{item.toolName}</span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Space size="small">
                           <Button
                             size="small"
-                            icon={<UpOutlined />}
+                            icon={<ChevronUp size={14} />}
                             onClick={() => handleMoveUp(category.categoryId, index)}
                             disabled={index === 0}
                             title="上移"
                           />
                           <Button
                             size="small"
-                            icon={<DownOutlined />}
+                            icon={<ChevronDown size={14} />}
                             onClick={() => handleMoveDown(category.categoryId, index)}
                             disabled={index === category.tools.length - 1}
                             title="下移"
@@ -1060,18 +1066,18 @@ export const SettingsTool: React.FC = () => {
                         </Space>
                         <Button
                           size="small"
-                          icon={item.favorite ? <StarFilled /> : <StarOutlined />}
+                          icon={<Star size={14} fill={item.favorite ? token.colorWarning : 'none'} />}
                           onClick={() => handleToolFavoriteChange(category.categoryId, item.toolId, !item.favorite)}
                           title={item.favorite ? '取消收藏' : '添加到收藏'}
                           style={{
-                            color: item.favorite ? '#faad14' : undefined
+                            color: item.favorite ? token.colorWarning : undefined
                           }}
                         />
                         <Switch
                           checked={item.visible}
                           onChange={(checked) => handleToolVisibilityChange(category.categoryId, item.toolId, checked)}
-                          checkedChildren={<EyeOutlined />}
-                          unCheckedChildren={<EyeInvisibleOutlined />}
+                          checkedChildren={<Eye size={12} />}
+                          unCheckedChildren={<EyeOff size={12} />}
                         />
                       </div>
                     </div>
@@ -1086,7 +1092,7 @@ export const SettingsTool: React.FC = () => {
       <Card 
         title={
           <Space>
-            <BackupOutlined />
+            <Save size={20} />
             <span>备份设置</span>
           </Space>
         } 
@@ -1153,8 +1159,8 @@ export const SettingsTool: React.FC = () => {
                   form.setFieldsValue({ backupDir: e.target.value })
                 }}
               />
-              <Button 
-                icon={<FolderOpenOutlined />}
+              <Button
+                icon={<FolderOpen size={14} />}
                 onClick={handleSelectBackupDirectory}
               >
                 选择
@@ -1167,7 +1173,7 @@ export const SettingsTool: React.FC = () => {
       <Card 
         title={
           <Space>
-            <HistoryOutlined />
+            <History size={20} />
             <span>备份管理</span>
           </Space>
         } 
@@ -1176,20 +1182,20 @@ export const SettingsTool: React.FC = () => {
         <Space style={{ marginBottom: 16 }}>
           <Button
             type="primary"
-            icon={<BackupOutlined />}
+            icon={<Save size={14} />}
             onClick={handleCreateBackup}
             loading={loadingBackup}
           >
             手动备份
           </Button>
           <Button
-            icon={<CloudUploadOutlined />}
+            icon={<CloudUpload size={14} />}
             onClick={handleImportBackup}
           >
             导入备份
           </Button>
           <Button
-            icon={<ReloadOutlined />}
+            icon={<RotateCw size={14} />}
             onClick={loadBackupList}
             loading={loadingBackup}
           >

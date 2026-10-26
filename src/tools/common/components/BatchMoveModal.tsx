@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { Modal, TreeSelect, message } from 'antd';
-import { FolderOutlined } from '@ant-design/icons';
+import { Folder } from 'lucide-react';
 import { Group, BaseItem } from '../types';
 import { getChildGroups } from '../utils/groupUtils';
 
@@ -38,7 +38,7 @@ export function BatchMoveModal<T extends BaseItem>(props: BatchMoveModalProps<T>
           value={group.id}
           title={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <FolderOutlined />
+              <Folder size={14} />
               <span>{group.name}</span>
             </div>
           }

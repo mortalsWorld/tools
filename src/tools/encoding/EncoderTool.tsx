@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Card, Input, Button, Space, message, Tabs, theme, ConfigProvider } from 'antd';
-import { CopyOutlined, CheckOutlined } from '@ant-design/icons';
+import { Copy, Check } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const { TextArea } = Input;
 
@@ -132,7 +133,9 @@ export const EncoderTool: React.FC = () => {
             </div>
             <div style={{ textAlign: 'center' }}>
               <Space>
-                <Button type="primary" onClick={encodeBase64}>编码 →</Button>
+                <motion.div whileTap={{ scale: 0.97 }} style={{ display: 'inline-flex' }}>
+                  <Button type="primary" onClick={encodeBase64}>编码 →</Button>
+                </motion.div>
                 <Button onClick={decodeBase64}>← 解码</Button>
               </Space>
             </div>
@@ -281,8 +284,8 @@ export const EncoderTool: React.FC = () => {
           title="编码解码工具"
           extra={
             <Space>
-              <Button 
-                icon={copied ? <CheckOutlined /> : <CopyOutlined />} 
+              <Button
+                icon={copied ? <Check size={14} /> : <Copy size={14} />}
                 onClick={() => handleCopy(encodedText || plainText)}
                 disabled={!encodedText && !plainText}
               >
@@ -291,7 +294,6 @@ export const EncoderTool: React.FC = () => {
               <Button onClick={() => { setPlainText(''); setEncodedText(''); }}>清空</Button>
             </Space>
           }
-          style={{ borderRadius: 12 }}
         >
           <Tabs
             activeKey={activeTab}

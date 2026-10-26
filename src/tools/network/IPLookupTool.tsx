@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Card, Input, Button, Space, message, Table, Alert, Divider, Statistic, Row, Col, Badge, Tag, theme, Select } from 'antd';
-import { SearchOutlined, ClearOutlined, CopyOutlined, DownloadOutlined, CheckCircleOutlined, CloseCircleOutlined, FilterOutlined } from '@ant-design/icons';
+import { Search, Eraser, Copy, Download, CircleCheck, CircleX, ListFilter } from 'lucide-react';
 
 const { TextArea } = Input;
 
@@ -160,10 +160,10 @@ function getRange(rec: ParsedRecord): { start: number | bigint; end: number | bi
 type MatchRelation = 'exact' | 'contained' | 'contains' | 'overlap';
 
 const RELATION_LABELS: Record<MatchRelation, { text: string; color: string }> = {
-  exact: { text: '完全相同', color: '#722ed1' },
-  contained: { text: '被包含', color: '#1890ff' },
-  contains: { text: '包含', color: '#52c41a' },
-  overlap: { text: '范围重叠', color: '#fa8c16' },
+  exact: { text: '完全相同', color: 'purple' },
+  contained: { text: '被包含', color: 'processing' },
+  contains: { text: '包含', color: 'success' },
+  overlap: { text: '范围重叠', color: 'warning' },
 };
 
 // 两个解析记录的匹配关系
@@ -433,11 +433,11 @@ export const IPLookupTool: React.FC = () => {
       width: 100,
       render: (status: string) => {
         if (status === 'match') {
-          return <Badge status="success" text={<span style={{ color: '#52c41a', fontWeight: 'bold' }}>匹配</span>} />;
+          return <Badge status="success" text={<span style={{ color: token.colorSuccess, fontWeight: 'bold' }}>匹配</span>} />;
         } else if (status === 'miss') {
-          return <Badge status="error" text={<span style={{ color: '#ff4d4f' }}>未匹配</span>} />;
+          return <Badge status="error" text={<span style={{ color: token.colorError }}>未匹配</span>} />;
         } else {
-          return <Badge status="warning" text={<span style={{ color: '#faad14' }}>无效IP</span>} />;
+          return <Badge status="warning" text={<span style={{ color: token.colorWarning }}>无效IP</span>} />;
         }
       },
     },
@@ -494,16 +494,16 @@ export const IPLookupTool: React.FC = () => {
       <Card
         title={
           <span>
-            <SearchOutlined style={{ marginRight: '8px' }} />
+            <Search size={20} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
             IP查找工具（批量匹配）
           </span>
         }
         extra={
           <Space>
-            <Button icon={<ClearOutlined />} onClick={handleClear}>
+            <Button icon={<Eraser size={14} />} onClick={handleClear}>
               清空
             </Button>
-            <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>
+            <Button type="primary" icon={<Search size={14} />} onClick={handleSearch}>
               查找匹配
             </Button>
           </Space>
@@ -574,7 +574,7 @@ export const IPLookupTool: React.FC = () => {
                 {errors.map((err, idx) => (
                   <div key={idx} style={{ 
                     padding: '4px 0', 
-                    borderBottom: '1px dashed #f0d0d0',
+                    borderBottom: `1px dashed ${token.colorErrorBorder}`,
                     fontSize: '13px',
                     fontFamily: "'Monaco', 'Menlo', monospace"
                   }}>
@@ -599,29 +599,29 @@ export const IPLookupTool: React.FC = () => {
             <Divider>匹配结果统计</Divider>
             <Row gutter={16} style={{ marginBottom: '16px' }}>
               <Col span={6}>
-                <Statistic title="总计" value={totalCount} valueStyle={{ color: '#1890ff' }} />
+                <Statistic title="总计" value={totalCount} valueStyle={{ color: token.colorPrimary }} />
               </Col>
               <Col span={6}>
-                <Statistic 
-                  title="匹配" 
-                  value={matchCount} 
-                  valueStyle={{ color: '#52c41a' }}
-                  prefix={<CheckCircleOutlined />}
+                <Statistic
+                  title="匹配"
+                  value={matchCount}
+                  valueStyle={{ color: token.colorSuccess }}
+                  prefix={<CircleCheck size={16} />}
                 />
               </Col>
               <Col span={6}>
-                <Statistic 
-                  title="未匹配" 
-                  value={missCount} 
-                  valueStyle={{ color: '#ff4d4f' }}
-                  prefix={<CloseCircleOutlined />}
+                <Statistic
+                  title="未匹配"
+                  value={missCount}
+                  valueStyle={{ color: token.colorError }}
+                  prefix={<CircleX size={16} />}
                 />
               </Col>
               <Col span={6}>
-                <Statistic 
-                  title="无效IP" 
-                  value={invalidCount} 
-                  valueStyle={{ color: '#faad14' }}
+                <Statistic
+                  title="无效IP"
+                  value={invalidCount}
+                  valueStyle={{ color: token.colorWarning }}
                 />
               </Col>
             </Row>
@@ -631,7 +631,7 @@ export const IPLookupTool: React.FC = () => {
                 匹配结果详情
                 {(statusFilter || relationFilter || keywordFilter) && (
                   <Tag color="processing" style={{ marginLeft: '8px' }}>
-                    <FilterOutlined /> 已筛选 {filteredResults.length} / {results.length}
+                    <ListFilter size={13} /> 已筛选 {filteredResults.length} / {results.length}
                   </Tag>
                 )}
               </span>
@@ -668,10 +668,10 @@ export const IPLookupTool: React.FC = () => {
                   value={keywordFilter}
                   onChange={(e) => { setKeywordFilter(e.target.value); setPagination(prev => ({ ...prev, current: 1 })); }}
                 />
-                <Button size="small" icon={<CopyOutlined />} onClick={handleCopyResults}>
+                <Button size="small" icon={<Copy size={14} />} onClick={handleCopyResults}>
                   复制结果
                 </Button>
-                <Button size="small" icon={<DownloadOutlined />} onClick={handleExportCSV}>
+                <Button size="small" icon={<Download size={14} />} onClick={handleExportCSV}>
                   导出 CSV
                 </Button>
               </Space>
@@ -688,8 +688,8 @@ export const IPLookupTool: React.FC = () => {
               }}
               size="small"
               scroll={{ y: 400 }}
-              style={{ 
-                border: '1px solid #f0f0f0',
+              style={{
+                border: `1px solid ${token.colorBorderSecondary}`,
                 borderRadius: '8px'
               }}
             />

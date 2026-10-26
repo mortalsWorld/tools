@@ -11,6 +11,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../context/ThemeContext';
 import { toolRegistry } from '../tools/registry';
 import { Tool, ToolCategory } from '../types';
+import pkg from '../../package.json';
+
+const APP_VERSION = pkg.version;
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
@@ -303,7 +306,7 @@ const MainLayoutContent: React.FC<{
               borderTop: `1px solid ${token.colorBorderSecondary}`,
             }}
           >
-            v1.6.0
+            v{APP_VERSION}
           </div>
         )}
       </Sider>

@@ -16,19 +16,21 @@ import {
   Select,
 } from 'antd';
 import {
-  PlusOutlined,
-  SafetyOutlined,
-  UnorderedListOutlined,
-  EditOutlined,
-  SettingOutlined,
-  CopyOutlined,
-  EyeOutlined,
-  EyeInvisibleOutlined,
-  SwapOutlined,
-  CheckSquareOutlined,
-  CheckOutlined,
-  KeyOutlined,
-} from '@ant-design/icons';
+  Plus,
+  ShieldCheck,
+  List,
+  Pencil,
+  Settings,
+  Copy,
+  Eye,
+  EyeOff,
+  ArrowLeftRight,
+  SquareCheck,
+  Check,
+  KeyRound,
+  LayoutGrid,
+} from 'lucide-react';
+import { motion } from 'framer-motion';
 import {
   DndContext,
   closestCenter,
@@ -437,60 +439,60 @@ export const PasswordTool: React.FC = () => {
 
   const renderPasswordTooltip = useCallback((item: PasswordItem) => (
     <div style={{ padding: 14, maxWidth: 500, wordWrap: 'break-word', overflowWrap: 'break-word' }}>
-      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10, color: '#333', wordBreak: 'break-all', lineHeight: 1.4 }}>
+      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10, color: token.colorText, wordBreak: 'break-all', lineHeight: 1.4 }}>
         {item.name}
       </div>
       {item.username && (
-        <div style={{ fontSize: 12, color: '#666', marginBottom: 6, lineHeight: 1.5 }}>
-          <span style={{ fontWeight: 500, color: '#999', display: 'block', marginBottom: 3 }}>用户名：</span>
+        <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 6, lineHeight: 1.5 }}>
+          <span style={{ fontWeight: 500, color: token.colorTextTertiary, display: 'block', marginBottom: 3 }}>用户名：</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ wordBreak: 'break-all', fontFamily: 'Consolas, Monaco, monospace' }}>{item.username}</span>
             <span
-              style={{ cursor: 'pointer', color: '#1890ff', fontSize: 11 }}
+              style={{ cursor: 'pointer', color: token.colorPrimary, fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 2 }}
               onClick={(e) => {
                 e.stopPropagation();
                 navigator.clipboard.writeText(item.username);
                 message.success('用户名已复制');
               }}
             >
-              <CopyOutlined /> 复制
+              <Copy size={12} /> 复制
             </span>
           </div>
         </div>
       )}
       {item.url && (
-        <div style={{ fontSize: 12, color: '#666', marginBottom: 6, lineHeight: 1.5 }}>
-          <span style={{ fontWeight: 500, color: '#999', display: 'block', marginBottom: 3 }}>网址：</span>
-          <span style={{ color: '#1890ff', wordBreak: 'break-all', fontFamily: 'Consolas, Monaco, monospace' }}>{item.url}</span>
+        <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 6, lineHeight: 1.5 }}>
+          <span style={{ fontWeight: 500, color: token.colorTextTertiary, display: 'block', marginBottom: 3 }}>网址：</span>
+          <span style={{ color: token.colorPrimary, wordBreak: 'break-all', fontFamily: 'Consolas, Monaco, monospace' }}>{item.url}</span>
         </div>
       )}
-      <div style={{ fontSize: 12, color: '#666', marginBottom: item.description ? 6 : 0, lineHeight: 1.5 }}>
-        <span style={{ fontWeight: 500, color: '#999', display: 'block', marginBottom: 3 }}>分组：</span>
+      <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: item.description ? 6 : 0, lineHeight: 1.5 }}>
+        <span style={{ fontWeight: 500, color: token.colorTextTertiary, display: 'block', marginBottom: 3 }}>分组：</span>
         <span>{groups.find((g: Group) => g.id === item.group)?.name || '默认分组'}</span>
       </div>
       {item.description && (
-        <div style={{ fontSize: 12, color: '#666', borderTop: '1px solid #eee', paddingTop: 8, marginTop: 8, lineHeight: 1.5 }}>
-          <span style={{ fontWeight: 500, color: '#999', display: 'block', marginBottom: 3 }}>备注：</span>
+        <div style={{ fontSize: 12, color: token.colorTextSecondary, borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 8, marginTop: 8, lineHeight: 1.5 }}>
+          <span style={{ fontWeight: 500, color: token.colorTextTertiary, display: 'block', marginBottom: 3 }}>备注：</span>
           <span style={{ display: 'block', wordBreak: 'break-all' }}>{item.description}</span>
         </div>
       )}
     </div>
-  ), [groups]);
+  ), [groups, token]);
 
   const renderPasswordSubtitle = useCallback((item: PasswordItem) => (
     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <KeyOutlined />
+      <KeyRound size={13} />
       <span style={{ marginLeft: 4 }}>{item.username}</span>
       {item.username && (
         <span
-          style={{ cursor: 'pointer', color: token.colorPrimary, marginLeft: 4 }}
+          style={{ cursor: 'pointer', color: token.colorPrimary, marginLeft: 4, display: 'inline-flex', alignItems: 'center' }}
           onClick={(e) => {
             e.stopPropagation();
             navigator.clipboard.writeText(item.username);
             message.success('用户名已复制');
           }}
         >
-          <CopyOutlined />
+          <Copy size={12} />
         </span>
       )}
     </span>
@@ -508,13 +510,13 @@ export const PasswordTool: React.FC = () => {
       >
         {showPassword[item.id] ? (
           <>
-            <EyeInvisibleOutlined /> <span style={{ fontFamily: 'Consolas, monospace' }}>{item.password}</span>
+            <EyeOff size={13} /> <span style={{ fontFamily: 'Consolas, monospace' }}>{item.password}</span>
             <span style={{ marginLeft: 8, cursor: 'pointer', color: token.colorPrimary }} onClick={(e) => { e.stopPropagation(); handleCopyPassword(item.password); }}>
-              <CopyOutlined /> 复制
+              <Copy size={12} /> 复制
             </span>
           </>
         ) : (
-          <><EyeOutlined /> 点击显示密码</>
+          <><Eye size={13} /> 点击显示密码</>
         )}
       </span>
     </Space>
@@ -567,8 +569,8 @@ export const PasswordTool: React.FC = () => {
             backgroundColor: token.colorBgElevated,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 16, fontWeight: 600, flexShrink: 0 }}>
-                <SafetyOutlined style={{ marginRight: 8, color: token.colorPrimary }} />
+              <span style={{ fontSize: 16, fontWeight: 600, flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                <ShieldCheck size={16} style={{ marginRight: 8, color: token.colorPrimary }} />
                 密码管理
               </span>
               {selectedGroup !== 'all' && (
@@ -590,7 +592,7 @@ export const PasswordTool: React.FC = () => {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <Button
-                icon={<SafetyOutlined />}
+                icon={<ShieldCheck size={14} />}
                 onClick={() => setIsGeneratorModalVisible(true)}
                 size="small"
               >
@@ -599,12 +601,12 @@ export const PasswordTool: React.FC = () => {
 
               {isEditMode && (
                 <>
-                  <Button icon={<CheckSquareOutlined />} onClick={handleSelectAll} size="small">
+                  <Button icon={<SquareCheck size={14} />} onClick={handleSelectAll} size="small">
                     全选
                   </Button>
                   <Button
                     type="primary"
-                    icon={<CheckOutlined />}
+                    icon={<Check size={14} />}
                     onClick={handleOpenBatchMoveModal}
                     disabled={selectedItemIds.size === 0}
                     size="small"
@@ -616,7 +618,7 @@ export const PasswordTool: React.FC = () => {
 
               <Button
                 type={isEditMode ? 'primary' : 'default'}
-                icon={<SwapOutlined />}
+                icon={<ArrowLeftRight size={14} />}
                 onClick={handleToggleMultiSelectMode}
                 size="small"
               >
@@ -629,16 +631,18 @@ export const PasswordTool: React.FC = () => {
                 buttonStyle="solid"
                 size="small"
               >
-                <Radio.Button value="grid"><SafetyOutlined /></Radio.Button>
-                <Radio.Button value="list"><UnorderedListOutlined /></Radio.Button>
+                <Radio.Button value="grid"><LayoutGrid size={14} style={{ verticalAlign: 'middle' }} /></Radio.Button>
+                <Radio.Button value="list"><List size={14} style={{ verticalAlign: 'middle' }} /></Radio.Button>
               </Radio.Group>
 
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleAddItem} size="small">
-                添加密码
-              </Button>
+              <motion.div whileTap={{ scale: 0.97 }}>
+                <Button type="primary" icon={<Plus size={14} />} onClick={handleAddItem} size="small">
+                  添加密码
+                </Button>
+              </motion.div>
 
               <Button
-                icon={<SettingOutlined />}
+                icon={<Settings size={14} />}
                 onClick={() => setIsGroupManagerVisible(true)}
                 size="small"
               >
@@ -703,7 +707,7 @@ export const PasswordTool: React.FC = () => {
                         : '该分组下还没有密码'
                   }
                 >
-                  <Button type="primary" icon={<PlusOutlined />} onClick={handleAddItem}>
+                  <Button type="primary" icon={<Plus size={14} />} onClick={handleAddItem}>
                     添加密码
                   </Button>
                 </Empty>
@@ -798,7 +802,7 @@ export const PasswordTool: React.FC = () => {
           </DragOverlay>
 
           <Modal
-            title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><PlusOutlined /> 添加密码</div>}
+            title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Plus size={16} /> 添加密码</div>}
             open={isAddModalVisible}
             onOk={handleConfirmAdd}
             onCancel={() => setIsAddModalVisible(false)}
@@ -822,7 +826,7 @@ export const PasswordTool: React.FC = () => {
                   value={newItem.username}
                   onChange={(e) => setNewItem(prev => ({ ...prev, username: e.target.value }))}
                   placeholder="请输入用户名或邮箱"
-                  prefix={<KeyOutlined />}
+                  prefix={<KeyRound size={14} style={{ color: token.colorTextTertiary }} />}
                 />
               </div>
               <div>
@@ -835,7 +839,7 @@ export const PasswordTool: React.FC = () => {
                     style={{ flex: 1 }}
                   />
                   <Button
-                    icon={<SafetyOutlined />}
+                    icon={<ShieldCheck size={14} />}
                     onClick={() => {
                       setGenLength(16);
                       setGenIncludeNumbers(true);
@@ -850,7 +854,7 @@ export const PasswordTool: React.FC = () => {
                   </Button>
                   {generatedPassword && isGeneratorModalVisible === false && (
                     <Button
-                      icon={<CopyOutlined />}
+                      icon={<Copy size={14} />}
                       onClick={() => {
                         setNewItem(prev => ({ ...prev, password: generatedPassword }));
                       }}
@@ -929,7 +933,7 @@ export const PasswordTool: React.FC = () => {
 
           {editingItem && (
             <Modal
-              title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><EditOutlined /> 编辑密码</div>}
+              title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Pencil size={16} /> 编辑密码</div>}
               open={isEditModalVisible}
               onOk={handleConfirmEdit}
               onCancel={() => { setIsEditModalVisible(false); setEditingItem(null); }}
@@ -950,7 +954,7 @@ export const PasswordTool: React.FC = () => {
                   <Input
                     value={editingItem.username}
                     onChange={(e) => setEditingItem(prev => prev ? ({ ...prev, username: e.target.value }) : null)}
-                    prefix={<KeyOutlined />}
+                    prefix={<KeyRound size={14} style={{ color: token.colorTextTertiary }} />}
                   />
                 </div>
                 <div>
@@ -962,7 +966,7 @@ export const PasswordTool: React.FC = () => {
                       style={{ flex: 1 }}
                     />
                     <Button
-                      icon={<SafetyOutlined />}
+                      icon={<ShieldCheck size={14} />}
                       onClick={() => {
                         setGenLength(16);
                         setGenIncludeNumbers(true);
@@ -977,7 +981,7 @@ export const PasswordTool: React.FC = () => {
                     </Button>
                     {generatedPassword && isGeneratorModalVisible === false && (
                       <Button
-                        icon={<CopyOutlined />}
+                        icon={<Copy size={14} />}
                         onClick={() => {
                           setEditingItem(prev => prev ? ({ ...prev, password: generatedPassword }) : null);
                         }}
@@ -1053,7 +1057,7 @@ export const PasswordTool: React.FC = () => {
           )}
 
           <Modal
-            title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><SafetyOutlined /> 密码生成器</div>}
+            title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><ShieldCheck size={16} /> 密码生成器</div>}
             open={isGeneratorModalVisible}
             onOk={() => {
               if (generatedPassword) {
@@ -1137,7 +1141,7 @@ export const PasswordTool: React.FC = () => {
                       {generatedPassword}
                     </div>
                     <Space>
-                      <Button size="small" icon={<CopyOutlined />} onClick={() => {
+                      <Button size="small" icon={<Copy size={14} />} onClick={() => {
                         navigator.clipboard.writeText(generatedPassword);
                         message.success('已复制到剪贴板');
                       }}>

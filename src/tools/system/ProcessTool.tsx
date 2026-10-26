@@ -5,13 +5,13 @@ import {
   Tabs, Switch
 } from 'antd'
 import { 
-  ReloadOutlined, DeleteOutlined, SearchOutlined, FileSearchOutlined, 
-  CiOutlined, DatabaseOutlined, MacCommandOutlined, WifiOutlined, 
-  MoreOutlined, CloseCircleOutlined, AppstoreOutlined, FolderOpenOutlined,
-  FolderAddOutlined, FileAddOutlined, MergeCellsOutlined
-} from '@ant-design/icons'
+  RotateCw, Trash2, Search, FileSearch, 
+  Cpu, MemoryStick, SquareTerminal, Wifi, 
+  ChevronDown, ChevronUp, LayoutGrid, FolderOpen,
+  FolderPlus, FilePlus, Merge
+} from 'lucide-react'
 
-const { Title, Text } = Typography
+const { Text } = Typography
 
 interface ProcessInfo {
   pid: number
@@ -45,10 +45,10 @@ const formatBytes = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-const getStatusColor = (percent: number): string => {
-  if (percent > 80) return '#ff4d4f'
-  if (percent > 50) return '#fa8c16'
-  return '#52c41a'
+const getStatusColor = (percent: number, token: any): string => {
+  if (percent > 80) return token.colorError
+  if (percent > 50) return token.colorWarning
+  return token.colorSuccess
 }
 
 export const ProcessTool: React.FC = () => {
@@ -342,9 +342,9 @@ export const ProcessTool: React.FC = () => {
                 <code key={pid} style={{ 
                   fontSize: 11, 
                   padding: '2px 6px', 
-                  background: '#f0f5ff', 
+                  background: token.colorFillAlter, 
                   borderRadius: 4,
-                  color: '#1890ff'
+                  color: token.colorPrimary
                 }}>
                   {pid}
                 </code>
@@ -354,9 +354,9 @@ export const ProcessTool: React.FC = () => {
                   <code style={{ 
                     fontSize: 11, 
                     padding: '2px 6px', 
-                    background: '#fff7e6', 
+                    background: token.colorWarningBg, 
                     borderRadius: 4,
-                    color: '#fa8c16'
+                    color: token.colorWarning
                   }}>
                     +{record.pids.length - 3}
                   </code>
@@ -368,7 +368,7 @@ export const ProcessTool: React.FC = () => {
         {
           title: (
             <Space size="small">
-              <AppstoreOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <LayoutGrid size={14} style={{ color: token.colorTextSecondary }} />
               <span style={{ fontSize: 13, fontWeight: 500 }}>进程名称</span>
             </Space>
           ),
@@ -383,7 +383,7 @@ export const ProcessTool: React.FC = () => {
                 <Badge 
                   count={record.count} 
                   style={{ 
-                    backgroundColor: record.count > 1 ? '#1890ff' : '#52c41a',
+                    backgroundColor: record.count > 1 ? token.colorPrimary : token.colorSuccess,
                     fontSize: 11,
                     boxShadow: 'none',
                     flexShrink: 0
@@ -396,7 +396,7 @@ export const ProcessTool: React.FC = () => {
         {
           title: (
             <Space size="small">
-              <CiOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <Cpu size={14} style={{ color: token.colorTextSecondary }} />
               <span style={{ fontSize: 13, fontWeight: 500 }}>CPU (合计)</span>
             </Space>
           ),
@@ -411,7 +411,7 @@ export const ProcessTool: React.FC = () => {
                 <span style={{ 
                   fontSize: 13, 
                   fontWeight: 500, 
-                  color: getStatusColor(usage) 
+                  color: getStatusColor(usage, token) 
                 }}>
                   {usage.toFixed(1)}%
                 </span>
@@ -420,9 +420,9 @@ export const ProcessTool: React.FC = () => {
                 percent={Math.min(usage, 100)}
                 size="small"
                 showInfo={false}
-                strokeColor={getStatusColor(usage)}
+                strokeColor={getStatusColor(usage, token)}
                 strokeWidth={6}
-                trailColor="#f0f0f0"
+                trailColor={token.colorBorderSecondary}
               />
             </div>
           )
@@ -430,7 +430,7 @@ export const ProcessTool: React.FC = () => {
         {
           title: (
             <Space size="small">
-              <DatabaseOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <MemoryStick size={14} style={{ color: token.colorTextSecondary }} />
               <span style={{ fontSize: 13, fontWeight: 500 }}>内存 (合计)</span>
             </Space>
           ),
@@ -446,7 +446,7 @@ export const ProcessTool: React.FC = () => {
                   <span style={{ 
                     fontSize: 12, 
                     fontWeight: 500, 
-                    color: getStatusColor(usagePercent) 
+                    color: getStatusColor(usagePercent, token) 
                   }}>
                     {record.totalMemory}
                   </span>
@@ -455,9 +455,9 @@ export const ProcessTool: React.FC = () => {
                   percent={Math.min(usagePercent, 100)}
                   size="small"
                   showInfo={false}
-                  strokeColor={getStatusColor(usagePercent)}
+                  strokeColor={getStatusColor(usagePercent, token)}
                   strokeWidth={6}
-                  trailColor="#f0f0f0"
+                  trailColor={token.colorBorderSecondary}
                 />
               </div>
             )
@@ -466,7 +466,7 @@ export const ProcessTool: React.FC = () => {
         {
           title: (
             <Space size="small">
-              <WifiOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <Wifi size={14} style={{ color: token.colorTextSecondary }} />
               <span style={{ fontSize: 13, fontWeight: 500 }}>端口 (合并)</span>
             </Space>
           ),
@@ -487,12 +487,13 @@ export const ProcessTool: React.FC = () => {
                   {displayPorts.map(port => (
                     <Tag 
                       key={port} 
-                      color="blue" 
+                      color="processing" 
                       style={{ 
                         fontSize: 11, 
                         padding: '3px 8px',
                         borderRadius: 4,
-                        fontWeight: 500
+                        fontWeight: 500,
+                        marginInlineEnd: 0
                       }}
                     >
                       {port}
@@ -503,9 +504,9 @@ export const ProcessTool: React.FC = () => {
                   <Button
                     type="link"
                     size="small"
-                    icon={isExpanded ? <CloseCircleOutlined /> : <MoreOutlined />}
+                    icon={isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                     onClick={() => togglePortExpand(record.name)}
-                    style={{ padding: 0, marginLeft: 4, color: '#1890ff' }}
+                    style={{ padding: 0, marginLeft: 4, color: token.colorPrimary, fontSize: 12 }}
                   >
                     {isExpanded ? '收起' : `+${ports.length - 5}`}
                   </Button>
@@ -525,7 +526,7 @@ export const ProcessTool: React.FC = () => {
                 type="text"
                 danger
                 size="small"
-                icon={<DeleteOutlined />}
+                icon={<Trash2 size={13} />}
                 onClick={() => handleKillMergedProcesses(record)}
                 style={{ fontSize: 12, padding: '4px 8px' }}
               >
@@ -558,7 +559,7 @@ export const ProcessTool: React.FC = () => {
         {
           title: (
             <Space size="small">
-              <MacCommandOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <SquareTerminal size={14} style={{ color: token.colorTextSecondary }} />
               <span style={{ fontSize: 13, fontWeight: 500 }}>PID</span>
             </Space>
           ),
@@ -572,9 +573,9 @@ export const ProcessTool: React.FC = () => {
               fontSize: 12, 
               fontWeight: 500,
               padding: '4px 10px', 
-              background: '#f0f5ff', 
+              background: token.colorFillAlter, 
               borderRadius: 6,
-              color: '#1890ff'
+              color: token.colorPrimary
             }}>
               {pid}
             </code>
@@ -583,7 +584,7 @@ export const ProcessTool: React.FC = () => {
         {
           title: (
             <Space size="small">
-              <AppstoreOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <LayoutGrid size={14} style={{ color: token.colorTextSecondary }} />
               <span style={{ fontSize: 13, fontWeight: 500 }}>进程名称</span>
             </Space>
           ),
@@ -605,7 +606,7 @@ export const ProcessTool: React.FC = () => {
         {
           title: (
             <Space size="small">
-              <CiOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <Cpu size={14} style={{ color: token.colorTextSecondary }} />
               <span style={{ fontSize: 13, fontWeight: 500 }}>CPU</span>
             </Space>
           ),
@@ -620,7 +621,7 @@ export const ProcessTool: React.FC = () => {
                 <span style={{ 
                   fontSize: 13, 
                   fontWeight: 500, 
-                  color: getStatusColor(usage) 
+                  color: getStatusColor(usage, token) 
                 }}>
                   {usage.toFixed(1)}%
                 </span>
@@ -629,9 +630,9 @@ export const ProcessTool: React.FC = () => {
                 percent={Math.min(usage, 100)}
                 size="small"
                 showInfo={false}
-                strokeColor={getStatusColor(usage)}
+                strokeColor={getStatusColor(usage, token)}
                 strokeWidth={6}
-                trailColor="#f0f0f0"
+                trailColor={token.colorBorderSecondary}
               />
             </div>
           )
@@ -639,7 +640,7 @@ export const ProcessTool: React.FC = () => {
         {
           title: (
             <Space size="small">
-              <DatabaseOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <MemoryStick size={14} style={{ color: token.colorTextSecondary }} />
               <span style={{ fontSize: 13, fontWeight: 500 }}>内存</span>
             </Space>
           ),
@@ -655,7 +656,7 @@ export const ProcessTool: React.FC = () => {
                   <span style={{ 
                     fontSize: 12, 
                     fontWeight: 500, 
-                    color: getStatusColor(usagePercent) 
+                    color: getStatusColor(usagePercent, token) 
                   }}>
                     {formatBytes(record.memoryBytes)}
                   </span>
@@ -664,9 +665,9 @@ export const ProcessTool: React.FC = () => {
                   percent={Math.min(usagePercent, 100)}
                   size="small"
                   showInfo={false}
-                  strokeColor={getStatusColor(usagePercent)}
+                  strokeColor={getStatusColor(usagePercent, token)}
                   strokeWidth={6}
-                  trailColor="#f0f0f0"
+                  trailColor={token.colorBorderSecondary}
                 />
               </div>
             )
@@ -675,7 +676,7 @@ export const ProcessTool: React.FC = () => {
         {
           title: (
             <Space size="small">
-              <WifiOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+              <Wifi size={14} style={{ color: token.colorTextSecondary }} />
               <span style={{ fontSize: 13, fontWeight: 500 }}>端口</span>
             </Space>
           ),
@@ -697,12 +698,13 @@ export const ProcessTool: React.FC = () => {
                   {displayPorts.map(port => (
                     <Tag 
                       key={port} 
-                      color="blue" 
+                      color="processing" 
                       style={{ 
                         fontSize: 11, 
                         padding: '3px 8px',
                         borderRadius: 4,
-                        fontWeight: 500
+                        fontWeight: 500,
+                        marginInlineEnd: 0
                       }}
                     >
                       {port}
@@ -713,9 +715,9 @@ export const ProcessTool: React.FC = () => {
                   <Button
                     type="link"
                     size="small"
-                    icon={isExpanded ? <CloseCircleOutlined /> : <MoreOutlined />}
+                    icon={isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                     onClick={() => togglePortExpand(record.pid)}
-                    style={{ padding: 0, marginLeft: 4, color: '#1890ff' }}
+                    style={{ padding: 0, marginLeft: 4, color: token.colorPrimary, fontSize: 12 }}
                   >
                     {isExpanded ? '收起' : `+${ports.length - 5}`}
                   </Button>
@@ -735,7 +737,7 @@ export const ProcessTool: React.FC = () => {
                 type="text"
                 danger
                 size="small"
-                icon={<DeleteOutlined />}
+                icon={<Trash2 size={14} />}
                 onClick={() => handleKillProcess(record.pid)}
                 style={{ fontSize: 13, padding: '4px 8px' }}
               />
@@ -757,14 +759,14 @@ export const ProcessTool: React.FC = () => {
   }, [processes])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: '20px 0' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '4px 0' }}>
       <div>
-        <Title level={4} style={{ margin: 0, marginBottom: 16, color: token.colorTextHeading }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <MacCommandOutlined style={{ fontSize: 20 }} />
-            系统监控
-          </span>
-        </Title>
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: token.colorText, letterSpacing: '-0.01em' }}>
+          进程查看
+        </h2>
+        <p style={{ margin: '4px 0 0', fontSize: 12, color: token.colorTextTertiary }}>
+          查看系统进程资源占用，支持合并同名进程与文件占用查询
+        </p>
       </div>
 
       {systemInfo ? (
@@ -772,45 +774,45 @@ export const ProcessTool: React.FC = () => {
           <Col xs={24} sm={12}>
             <Card 
               hoverable
-              bordered={false}
               style={{ 
                 height: '100%',
-                borderRadius: 16,
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)',
-                background: 'linear-gradient(135deg, #ffffff 0%, #f8faff 100%)'
+                background: token.colorBgElevated,
+                borderLeft: `3px solid ${token.colorPrimary}`,
               }}
+              styles={{ body: { padding: 20 } }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   <div style={{ 
-                    width: 56, 
-                    height: 56, 
-                    borderRadius: 16, 
-                    background: 'linear-gradient(135deg, #e6f7ff 0%, #b3d9ff 100%)',
+                    width: 44, 
+                    height: 44, 
+                    borderRadius: 10, 
+                    background: 'rgb(99 102 241 / 0.1)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    boxShadow: '0 4px 12px rgba(24, 144, 255, 0.15)'
+                    color: token.colorPrimary,
+                    flexShrink: 0
                   }}>
-                    <CiOutlined style={{ fontSize: 28, color: '#1890ff' }} />
+                    <Cpu size={22} />
                   </div>
                   <div>
-                    <Text strong style={{ display: 'block', fontSize: 15, color: token.colorTextHeading }}>CPU</Text>
-                    <Text type="secondary" style={{ display: 'block', fontSize: 12, marginTop: 2 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: token.colorText }}>CPU</div>
+                    <div style={{ fontSize: 12, color: token.colorTextTertiary, marginTop: 2, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {systemInfo.cpu?.name || 'Unknown'}
-                    </Text>
-                    <Text type="secondary" style={{ fontSize: 11, marginTop: 1, display: 'block' }}>
+                    </div>
+                    <div style={{ fontSize: 11, color: token.colorTextTertiary, marginTop: 1 }}>
                       {systemInfo.cpu?.cores || 0} 核心 / {systemInfo.cpu?.logicalProcessors || 0} 线程
-                    </Text>
+                    </div>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>使用率</Text>
+                  <div style={{ fontSize: 12, color: token.colorTextTertiary }}>使用率</div>
                   <div style={{ 
-                    fontSize: 40, 
-                    fontWeight: 700, 
-                    color: getStatusColor(cpuUsage),
-                    textShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                    fontSize: 28, 
+                    fontWeight: 600, 
+                    color: getStatusColor(cpuUsage, token),
+                    fontVariantNumeric: 'tabular-nums'
                   }}>
                     {cpuUsage.toFixed(1)}%
                   </div>
@@ -818,58 +820,56 @@ export const ProcessTool: React.FC = () => {
               </div>
               <Progress
                 percent={Math.min(cpuUsage, 100)}
-                strokeColor={{
-                  '0%': '#1890ff',
-                  '100%': getStatusColor(cpuUsage)
-                }}
-                strokeWidth={10}
+                strokeColor={getStatusColor(cpuUsage, token)}
+                strokeWidth={6}
                 showInfo={false}
-                style={{ marginTop: 20 }}
+                trailColor={token.colorBorderSecondary}
+                style={{ marginTop: 16 }}
               />
             </Card>
           </Col>
           <Col xs={24} sm={12}>
             <Card 
               hoverable
-              bordered={false}
               style={{ 
                 height: '100%',
-                borderRadius: 16,
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)',
-                background: 'linear-gradient(135deg, #ffffff 0%, #f6ffed 100%)'
+                background: token.colorBgElevated,
+                borderLeft: `3px solid ${token.colorSuccess}`,
               }}
+              styles={{ body: { padding: 20 } }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   <div style={{ 
-                    width: 56, 
-                    height: 56, 
-                    borderRadius: 16, 
-                    background: 'linear-gradient(135deg, #f6ffed 0%, #b7eb8f 100%)',
+                    width: 44, 
+                    height: 44, 
+                    borderRadius: 10, 
+                    background: 'rgb(16 185 129 / 0.1)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    boxShadow: '0 4px 12px rgba(82, 196, 26, 0.15)'
+                    color: token.colorSuccess,
+                    flexShrink: 0
                   }}>
-                    <DatabaseOutlined style={{ fontSize: 28, color: '#52c41a' }} />
+                    <MemoryStick size={22} />
                   </div>
                   <div>
-                    <Text strong style={{ display: 'block', fontSize: 15, color: token.colorTextHeading }}>内存</Text>
-                    <Text type="secondary" style={{ display: 'block', fontSize: 12, marginTop: 2 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: token.colorText }}>内存</div>
+                    <div style={{ fontSize: 12, color: token.colorTextTertiary, marginTop: 2 }}>
                       {formatBytes(memoryUsed)} / {formatBytes(memoryTotalBytes)}
-                    </Text>
-                    <Text type="secondary" style={{ fontSize: 11, marginTop: 1, display: 'block' }}>
+                    </div>
+                    <div style={{ fontSize: 11, color: token.colorTextTertiary, marginTop: 1 }}>
                       空闲: {formatBytes(systemInfo.memory?.free || 0)}
-                    </Text>
+                    </div>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>已用</Text>
+                  <div style={{ fontSize: 12, color: token.colorTextTertiary }}>已用</div>
                   <div style={{ 
-                    fontSize: 40, 
-                    fontWeight: 700, 
-                    color: getStatusColor(memoryPercent),
-                    textShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                    fontSize: 28, 
+                    fontWeight: 600, 
+                    color: getStatusColor(memoryPercent, token),
+                    fontVariantNumeric: 'tabular-nums'
                   }}>
                     {memoryPercent}%
                   </div>
@@ -877,13 +877,11 @@ export const ProcessTool: React.FC = () => {
               </div>
               <Progress
                 percent={memoryPercent}
-                strokeColor={{
-                  '0%': '#52c41a',
-                  '100%': getStatusColor(memoryPercent)
-                }}
-                strokeWidth={10}
+                strokeColor={getStatusColor(memoryPercent, token)}
+                strokeWidth={6}
                 showInfo={false}
-                style={{ marginTop: 20 }}
+                trailColor={token.colorBorderSecondary}
+                style={{ marginTop: 16 }}
               />
             </Card>
           </Col>
@@ -891,47 +889,40 @@ export const ProcessTool: React.FC = () => {
       ) : (
         <Row gutter={[16, 16]}>
           <Col xs={24} sm={12}>
-            <Card bordered={false} style={{ height: 180, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Card style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Spin size="large" />
             </Card>
           </Col>
           <Col xs={24} sm={12}>
-            <Card bordered={false} style={{ height: 180, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Card style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Spin size="large" />
             </Card>
           </Col>
         </Row>
       )}
 
-      <Card
-        bordered={false}
-        style={{ 
-          borderRadius: 16,
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)'
-        }}
-      >
+      <Card styles={{ body: { padding: 20 } }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Title level={4} style={{ margin: 0, color: token.colorTextHeading }}>进程列表</Title>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: token.colorText }}>进程列表</h3>
             <Badge 
               count={`${statsSummary.withPorts}/${statsSummary.total}`} 
               overflowCount={999}
               style={{ 
-                backgroundColor: '#52c41a',
+                backgroundColor: token.colorSuccess,
                 fontSize: 12,
                 padding: '0 6px',
-                borderRadius: 6
+                borderRadius: 6,
+                boxShadow: 'none'
               }}
             />
           </div>
           <Space size="middle">
             <Tooltip title="刷新进程列表">
               <Button
-                icon={<ReloadOutlined />}
+                icon={<RotateCw size={14} />}
                 onClick={handleRefresh}
                 loading={loading}
-                size="middle"
-                style={{ borderRadius: 8 }}
               >
                 刷新
               </Button>
@@ -940,10 +931,8 @@ export const ProcessTool: React.FC = () => {
               <Button
                 type="primary"
                 danger
-                icon={<DeleteOutlined />}
+                icon={<Trash2 size={14} />}
                 onClick={handleKillProcesses}
-                size="middle"
-                style={{ borderRadius: 8 }}
               >
                 批量结束 ({selectedPids.size})
               </Button>
@@ -958,8 +947,8 @@ export const ProcessTool: React.FC = () => {
             {
               key: 'process',
               label: (
-                <Space size="small">
-                  <SearchOutlined />
+                <Space size={6}>
+                  <Search size={14} />
                   <span>进程搜索</span>
                 </Space>
               ),
@@ -969,8 +958,8 @@ export const ProcessTool: React.FC = () => {
                     placeholder="搜索进程名称或PID"
                     value={searchText}
                     onChange={e => setSearchText(e.target.value)}
-                    prefix={<SearchOutlined style={{ color: token.colorTextSecondary }} />}
-                    style={{ width: 260, borderRadius: 8 }}
+                    prefix={<Search size={14} style={{ color: token.colorTextTertiary }} />}
+                    style={{ width: 260 }}
                     allowClear
                     size="middle"
                   />
@@ -978,13 +967,13 @@ export const ProcessTool: React.FC = () => {
                     placeholder="搜索端口"
                     value={portSearchText}
                     onChange={e => setPortSearchText(e.target.value)}
-                    prefix={<WifiOutlined style={{ color: token.colorTextSecondary }} />}
-                    style={{ width: 160, borderRadius: 8 }}
+                    prefix={<Wifi size={14} style={{ color: token.colorTextTertiary }} />}
+                    style={{ width: 160 }}
                     allowClear
                     size="middle"
                   />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 8, padding: '4px 12px', background: '#f0f5ff', borderRadius: 8 }}>
-                    <MergeCellsOutlined style={{ color: '#1890ff', fontSize: 14 }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 8, padding: '4px 12px', background: token.colorFillAlter, borderRadius: 8 }}>
+                    <Merge size={14} style={{ color: token.colorPrimary }} />
                     <Text style={{ fontSize: 13 }}>合并同名进程</Text>
                     <Switch
                       checked={mergeByName}
@@ -1001,8 +990,8 @@ export const ProcessTool: React.FC = () => {
             {
               key: 'file',
               label: (
-                <Space size="small">
-                  <FileSearchOutlined />
+                <Space size={6}>
+                  <FileSearch size={14} />
                   <span>文件占用查询</span>
                 </Space>
               ),
@@ -1015,14 +1004,14 @@ export const ProcessTool: React.FC = () => {
                     size="middle"
                   >
                     <Radio.Button value="file">
-                      <Space size="small">
-                        <SearchOutlined />
+                      <Space size={6}>
+                        <Search size={13} />
                         文件
                       </Space>
                     </Radio.Button>
                     <Radio.Button value="directory">
-                      <Space size="small">
-                        <FolderOpenOutlined />
+                      <Space size={6}>
+                        <FolderOpen size={13} />
                         目录
                       </Space>
                     </Radio.Button>
@@ -1037,13 +1026,13 @@ export const ProcessTool: React.FC = () => {
                         <Button
                           type="text"
                           size="small"
-                          icon={searchType === 'directory' ? <FolderAddOutlined /> : <FileAddOutlined />}
+                          icon={searchType === 'directory' ? <FolderPlus size={14} /> : <FilePlus size={14} />}
                           onClick={handleSelectPath}
                           style={{ padding: '0 4px', color: token.colorPrimary }}
                         />
                       </Tooltip>
                     }
-                    style={{ flex: 1, minWidth: 280, borderRadius: 8 }}
+                    style={{ flex: 1, minWidth: 280 }}
                     allowClear
                     size="middle"
                   />
@@ -1051,9 +1040,7 @@ export const ProcessTool: React.FC = () => {
                     type="primary"
                     onClick={handleFileSearch}
                     loading={fileSearching}
-                    size="middle"
                     disabled={!fileSearchText.trim()}
-                    style={{ borderRadius: 8 }}
                   >
                     {searchType === 'directory' ? '查询目录' : '查询文件'}
                   </Button>
@@ -1067,17 +1054,17 @@ export const ProcessTool: React.FC = () => {
         {fileHandles.length > 0 && (
           <div style={{ 
             marginBottom: 16, 
-            padding: '12px 20px', 
-            background: '#fff7e6', 
-            border: '1px solid #ffe58f', 
-            borderRadius: 10,
+            padding: '10px 16px', 
+            background: token.colorWarningBg, 
+            border: `1px solid ${token.colorWarningBorder}`, 
+            borderRadius: 8,
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center'
           }}>
             <div>
-              <Text style={{ fontSize: 14 }}>
-                找到 <strong style={{ fontSize: 15, color: '#fa8c16' }}>{fileHandles.length}</strong> 个占用该{searchType === 'directory' ? '目录' : '文件'}的进程，已在下方列表中标红显示
+              <Text style={{ fontSize: 13 }}>
+                找到 <strong style={{ color: token.colorWarning }}>{fileHandles.length}</strong> 个占用该{searchType === 'directory' ? '目录' : '文件'}的进程，已在下方列表中标红显示
               </Text>
             </div>
             <Button
@@ -1086,7 +1073,6 @@ export const ProcessTool: React.FC = () => {
                 setFileSearchText('');
                 setFileHandles([]);
               }}
-              style={{ borderRadius: 6 }}
             >
               清除
             </Button>
@@ -1100,7 +1086,7 @@ export const ProcessTool: React.FC = () => {
             style={{ padding: '60px 0' }}
           >
             {!loading && (
-              <Button type="primary" onClick={handleRefresh} style={{ borderRadius: 8 }}>
+              <Button type="primary" onClick={handleRefresh}>
                 刷新列表
               </Button>
             )}
@@ -1155,7 +1141,7 @@ export const ProcessTool: React.FC = () => {
               header: {
                 cell: (props) => (
                   <th style={{ 
-                    background: '#fafafa', 
+                    background: token.colorFillAlter, 
                     fontWeight: 600, 
                     fontSize: 13,
                     padding: '12px 16px'
@@ -1181,22 +1167,20 @@ export const ProcessTool: React.FC = () => {
             key="kill"
             type="primary"
             danger
-            icon={<DeleteOutlined />}
+            icon={<Trash2 size={14} />}
             onClick={() => {
               if (selectedProcess) {
                 handleKillProcess(selectedProcess.pid)
                 setSelectedProcess(null)
               }
             }}
-            style={{ borderRadius: 8 }}
           >
             结束进程
           </Button>,
-          <Button key="close" onClick={() => setSelectedProcess(null)} style={{ borderRadius: 8 }}>
+          <Button key="close" onClick={() => setSelectedProcess(null)}>
             关闭
           </Button>,
         ]}
-        style={{ borderRadius: 16 }}
       >
         {selectedProcess && (
           <Descriptions column={2} bordered size="middle">
@@ -1216,7 +1200,7 @@ export const ProcessTool: React.FC = () => {
               {selectedProcess.ports && selectedProcess.ports.length > 0 ? (
                 <Space size="small" wrap>
                   {selectedProcess.ports.map(port => (
-                    <Tag key={port} color="blue" style={{ borderRadius: 4 }}>{port}</Tag>
+                    <Tag key={port} color="processing" style={{ borderRadius: 4, marginInlineEnd: 0 }}>{port}</Tag>
                   ))}
                 </Space>
               ) : (

@@ -1,6 +1,6 @@
 {
   "name": "toolbox",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "工具箱 - 基于 Tauri 的轻量级通用工具集合，支持密码管理、文件启动、网络工具、文本处理等功能",
   "license": "SEE LICENSE IN LICENSE",
   "scripts": {
@@ -12,7 +12,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ant-design/icons": "^6.2.5",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",

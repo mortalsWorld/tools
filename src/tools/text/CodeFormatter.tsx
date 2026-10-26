@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Card, Input, Button, Space, message, theme, ConfigProvider, Checkbox, Tooltip, Alert, Segmented } from 'antd';
-import { CopyOutlined, CompressOutlined, ExpandOutlined, SwapOutlined, ClearOutlined } from '@ant-design/icons';
+import { Copy, Minimize2, Maximize2, ArrowLeftRight, Eraser } from 'lucide-react';
+import { motion } from 'framer-motion';
 import hljs from 'highlight.js';
 import json from 'highlight.js/lib/languages/json';
 import xml from 'highlight.js/lib/languages/xml';
@@ -474,8 +475,6 @@ export const CodeFormatter: React.FC = () => {
         <Card
           styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', height: '100%' } }}
           style={{
-            borderRadius: 12,
-            border: `1px solid ${token.colorBorderSecondary}`,
             flex: 1,
             minHeight: 0,
           }}
@@ -497,7 +496,7 @@ export const CodeFormatter: React.FC = () => {
               <Tooltip title={swapPanels ? '左侧输入/右侧输出' : '左侧输出/右侧输入'}>
                 <Button
                   size="small"
-                  icon={<SwapOutlined />}
+                  icon={<ArrowLeftRight size={14} />}
                   onClick={() => setSwapPanels(!swapPanels)}
                   type={swapPanels ? 'primary' : 'default'}
                 >
@@ -505,18 +504,20 @@ export const CodeFormatter: React.FC = () => {
                 </Button>
               </Tooltip>
               <div style={{ width: 1, height: 20, background: token.colorBorder, margin: '0 4px' }} />
-              <Button
-                size="small"
-                type="primary"
-                icon={<ExpandOutlined />}
-                onClick={isJson ? formatJson : formatXml}
-              >
-                格式化
-              </Button>
+              <motion.div whileTap={{ scale: 0.97 }} style={{ display: 'inline-flex' }}>
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<Maximize2 size={14} />}
+                  onClick={isJson ? formatJson : formatXml}
+                >
+                  格式化
+                </Button>
+              </motion.div>
               {isJson && (
                 <Button
                   size="small"
-                  icon={<CompressOutlined />}
+                  icon={<Minimize2 size={14} />}
                   onClick={compressJson}
                 >
                   压缩
@@ -524,7 +525,7 @@ export const CodeFormatter: React.FC = () => {
               )}
               <Button
                 size="small"
-                icon={<CopyOutlined />}
+                icon={<Copy size={14} />}
                 onClick={handleCopy}
                 disabled={!output}
               >
@@ -532,7 +533,7 @@ export const CodeFormatter: React.FC = () => {
               </Button>
               <Button
                 size="small"
-                icon={<SwapOutlined />}
+                icon={<ArrowLeftRight size={14} />}
                 onClick={handleSwap}
                 disabled={!output}
               >
@@ -540,7 +541,7 @@ export const CodeFormatter: React.FC = () => {
               </Button>
               <Button
                 size="small"
-                icon={<ClearOutlined />}
+                icon={<Eraser size={14} />}
                 onClick={handleClear}
               >
                 清空

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Row, Col, Descriptions, Button, message, Alert, Tag, Collapse, theme } from 'antd';
-import { ReloadOutlined, GlobalOutlined, EnvironmentOutlined, WifiOutlined, HomeOutlined } from '@ant-design/icons';
+import { RotateCw, Globe, MapPin, Wifi, House } from 'lucide-react';
 const { Panel } = Collapse;
 
 interface IPInfo {
@@ -282,7 +282,7 @@ export const NetworkTool: React.FC = () => {
         extra={
           <Button
             type="primary"
-            icon={<ReloadOutlined />}
+            icon={<RotateCw size={14} />}
             onClick={handleRefresh}
             loading={loading}
           >
@@ -296,19 +296,19 @@ export const NetworkTool: React.FC = () => {
             <Col xs={24} md={12}>
               <Descriptions title="公网基本信息" bordered column={1}>
                 <Descriptions.Item label="公网 IP 地址">
-                  <GlobalOutlined style={{ marginRight: '8px' }} />
+                  <Globe size={14} style={{ marginRight: '8px' }} />
                   {ipInfo.ip}
                 </Descriptions.Item>
                 <Descriptions.Item label="城市">
-                  <EnvironmentOutlined style={{ marginRight: '8px' }} />
+                  <MapPin size={14} style={{ marginRight: '8px' }} />
                   {ipInfo.city}
                 </Descriptions.Item>
                 <Descriptions.Item label="地区">
-                  <EnvironmentOutlined style={{ marginRight: '8px' }} />
+                  <MapPin size={14} style={{ marginRight: '8px' }} />
                   {ipInfo.region}
                 </Descriptions.Item>
                 <Descriptions.Item label="国家">
-                  <EnvironmentOutlined style={{ marginRight: '8px' }} />
+                  <MapPin size={14} style={{ marginRight: '8px' }} />
                   {ipInfo.country}
                 </Descriptions.Item>
               </Descriptions>
@@ -316,15 +316,15 @@ export const NetworkTool: React.FC = () => {
             <Col xs={24} md={12}>
               <Descriptions title="公网详细信息" bordered column={1}>
                 <Descriptions.Item label="经纬度">
-                  <EnvironmentOutlined style={{ marginRight: '8px' }} />
+                  <MapPin size={14} style={{ marginRight: '8px' }} />
                   {ipInfo.loc}
                 </Descriptions.Item>
                 <Descriptions.Item label="网络运营商">
-                  <WifiOutlined style={{ marginRight: '8px' }} />
+                  <Wifi size={14} style={{ marginRight: '8px' }} />
                   {ipInfo.org}
                 </Descriptions.Item>
                 <Descriptions.Item label="时区">
-                  <EnvironmentOutlined style={{ marginRight: '8px' }} />
+                  <MapPin size={14} style={{ marginRight: '8px' }} />
                   {ipInfo.timezone}
                 </Descriptions.Item>
               </Descriptions>
@@ -350,7 +350,7 @@ export const NetworkTool: React.FC = () => {
       <Card 
         title={
           <span>
-            <HomeOutlined style={{ marginRight: '8px' }} />
+            <House size={14} style={{ marginRight: '8px' }} />
             本地网络信息（内网IP）
           </span>
         }
@@ -361,10 +361,10 @@ export const NetworkTool: React.FC = () => {
             <h4 style={{ marginBottom: '12px', fontWeight: 500 }}>IPv4 地址</h4>
             <div 
               ref={ipv4Ref}
-              style={{ 
-                border: '1px solid #e8e8e8', 
-                borderRadius: '6px', 
-                padding: '12px', 
+              style={{
+                border: `1px solid ${token.colorBorder}`,
+                borderRadius: '6px',
+                padding: '12px',
                 width: '100%',
                 boxSizing: 'border-box',
                 height: panelHeight > 0 ? `${panelHeight}px` : 'auto',
@@ -376,8 +376,8 @@ export const NetworkTool: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {localNetworkInfo.ipv4.map((ip, index) => (
                     <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <span style={{ color: '#666', fontSize: '13px', minWidth: '80px' }}>内网 IP {index + 1}:</span>
-                      <Tag color="blue">{ip}</Tag>
+                      <span style={{ color: token.colorTextSecondary, fontSize: '13px', minWidth: '80px' }}>内网 IP {index + 1}:</span>
+                      <Tag color="processing">{ip}</Tag>
                       {isPrivateIP(ip) && <Tag color="green">私有IP</Tag>}
                     </div>
                   ))}
@@ -391,10 +391,10 @@ export const NetworkTool: React.FC = () => {
             <h4 style={{ marginBottom: '12px', fontWeight: 500 }}>IPv6 地址</h4>
             <div 
               ref={ipv6Ref}
-              style={{ 
-                border: '1px solid #e8e8e8', 
-                borderRadius: '6px', 
-                padding: '12px', 
+              style={{
+                border: `1px solid ${token.colorBorder}`,
+                borderRadius: '6px',
+                padding: '12px',
                 width: '100%',
                 boxSizing: 'border-box',
                 height: panelHeight > 0 ? `${panelHeight}px` : 'auto',

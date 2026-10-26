@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Card, Input, Checkbox, Space, theme, ConfigProvider, Alert, Button, Tooltip, Tabs } from 'antd';
-import { SearchOutlined, BookOutlined, ArrowRightOutlined } from '@ant-design/icons';
+import { Search, BookOpen, ArrowRight } from 'lucide-react';
 
 const { TextArea } = Input;
 
@@ -140,7 +140,7 @@ export const RegexTool: React.FC = () => {
     >
       <Card
         title="正则表达式测试"
-        style={{ borderRadius: 12, height: '100%', minHeight: '500px' }}
+        style={{ height: '100%', minHeight: '500px' }}
       >
         <Space vertical style={{ width: '100%' }} size="large">
           <div>
@@ -193,7 +193,7 @@ export const RegexTool: React.FC = () => {
             <Alert
               description={`找到 ${matches.length} 个匹配`}
               type="success"
-              icon={<SearchOutlined />}
+              icon={<Search size={16} />}
             />
           )}
 
@@ -294,7 +294,7 @@ export const RegexTool: React.FC = () => {
                     >
                       <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontWeight: 500, color: token.colorText }}>{preset.name}</span>
-                        <ArrowRightOutlined style={{ fontSize: 14, color: token.colorTextSecondary }} />
+                        <ArrowRight size={14} style={{ color: token.colorTextSecondary }} />
                       </span>
                     </Button>
                   ))}
@@ -304,7 +304,7 @@ export const RegexTool: React.FC = () => {
             <Tabs.TabPane tab="语法参考" key="syntax">
               <div style={{ padding: 16, background: token.colorBgContainer, borderRadius: 8, border: `1px solid ${token.colorBorder}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                  <BookOutlined style={{ color: token.colorInfo, fontSize: 18 }} />
+                  <BookOpen size={18} style={{ color: token.colorInfo }} />
                   <span style={{ fontWeight: 500, fontSize: 16, color: token.colorText }}>正则表达式语法参考</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Input, Button, Select, Space, message, Descriptions } from 'antd';
-import { ClockCircleOutlined, CopyOutlined, SwapOutlined } from '@ant-design/icons';
+import { Clock, Copy, ArrowLeftRight } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const { Option } = Select;
 
@@ -107,7 +108,7 @@ export const DateTimeTool: React.FC = () => {
               <Button
                 type="text"
                 size="small"
-                icon={<CopyOutlined />}
+                icon={<Copy size={14} />}
                 onClick={() => {
                   navigator.clipboard.writeText(currentTime.toString());
                   message.success('已复制');
@@ -119,7 +120,7 @@ export const DateTimeTool: React.FC = () => {
               <Button
                 type="text"
                 size="small"
-                icon={<CopyOutlined />}
+                icon={<Copy size={14} />}
                 onClick={() => {
                   navigator.clipboard.writeText(Math.floor(currentTime / 1000).toString());
                   message.success('已复制');
@@ -138,7 +139,7 @@ export const DateTimeTool: React.FC = () => {
             <Button
               type="text"
               size="small"
-              icon={<CopyOutlined />}
+              icon={<Copy size={14} />}
               onClick={copyTimestamp}
               style={{ marginLeft: 8 }}
             >
@@ -147,7 +148,7 @@ export const DateTimeTool: React.FC = () => {
             <Button
               type="text"
               size="small"
-              icon={<ClockCircleOutlined />}
+              icon={<Clock size={14} />}
               onClick={useCurrentTime}
               style={{ marginLeft: 8 }}
             >
@@ -173,10 +174,12 @@ export const DateTimeTool: React.FC = () => {
         </div>
 
         <Space>
-          <Button type="primary" icon={<SwapOutlined />} onClick={timestampToDate}>
-            时间戳 → 日期
-          </Button>
-          <Button icon={<SwapOutlined />} onClick={dateToTimestamp}>
+          <motion.div whileTap={{ scale: 0.97 }} style={{ display: 'inline-flex' }}>
+            <Button type="primary" icon={<ArrowLeftRight size={14} />} onClick={timestampToDate}>
+              时间戳 → 日期
+            </Button>
+          </motion.div>
+          <Button icon={<ArrowLeftRight size={14} />} onClick={dateToTimestamp}>
             日期 → 时间戳
           </Button>
         </Space>
@@ -187,7 +190,7 @@ export const DateTimeTool: React.FC = () => {
             <Button
               type="text"
               size="small"
-              icon={<CopyOutlined />}
+              icon={<Copy size={14} />}
               onClick={copyDate}
               style={{ marginLeft: 8 }}
             >

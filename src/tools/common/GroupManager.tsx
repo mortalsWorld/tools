@@ -7,16 +7,17 @@ import {
   message,
   Empty,
   Dropdown,
-  MenuProps
+  MenuProps,
+  theme
 } from 'antd';
 import {
-  PlusCircleOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  SwapOutlined,
-  FolderOpenOutlined,
-  MoreOutlined
-} from '@ant-design/icons';
+  CirclePlus,
+  Pencil,
+  Trash2,
+  ArrowLeftRight,
+  FolderOpen,
+  Ellipsis
+} from 'lucide-react';
 
 const { TreeNode } = Tree;
 
@@ -45,6 +46,8 @@ const GroupManager: React.FC<GroupManagerProps> = ({
   onGroupsChange, 
   onClose 
 }) => {
+  const { token } = theme.useToken();
+
   // 确保向后兼容性：为缺少 sortOrder 的分组添加默认值
   const ensureSortOrder = (inputGroups: Group[]): Group[] => {
     return inputGroups.map((group, index) => ({
@@ -303,20 +306,20 @@ const GroupManager: React.FC<GroupManagerProps> = ({
     {
       key: 'add',
       label: '添加子分组',
-      icon: <PlusCircleOutlined />,
+      icon: <CirclePlus size={14} />,
       disabled: group.level >= 3,
       onClick: () => handleAddGroup(group.id)
     },
     {
       key: 'edit',
       label: '重命名',
-      icon: <EditOutlined />,
+      icon: <Pencil size={14} />,
       onClick: () => handleEditGroup(group)
     },
     {
       key: 'move',
       label: '移动分组',
-      icon: <SwapOutlined />,
+      icon: <ArrowLeftRight size={14} />,
       onClick: () => handleMoveGroup(group)
     },
     { type: 'divider' },
@@ -324,7 +327,7 @@ const GroupManager: React.FC<GroupManagerProps> = ({
       key: 'delete',
       label: '删除分组',
       danger: true,
-      icon: <DeleteOutlined />,
+      icon: <Trash2 size={14} />,
       onClick: () => handleDeleteGroup(group)
     }
   ];
@@ -356,7 +359,7 @@ const GroupManager: React.FC<GroupManagerProps> = ({
                 <Button 
                   type="text" 
                   size="small" 
-                  icon={<MoreOutlined />}
+                  icon={<Ellipsis size={14} />}
                   onClick={(e) => e.stopPropagation()}
                   style={{ padding: '0 4px' }}
                 />
@@ -373,7 +376,7 @@ const GroupManager: React.FC<GroupManagerProps> = ({
     <Modal
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <FolderOpenOutlined />
+          <FolderOpen size={16} />
           分组管理
         </div>
       }
@@ -390,7 +393,7 @@ const GroupManager: React.FC<GroupManagerProps> = ({
         <Button 
           type="primary" 
           size="small" 
-          icon={<PlusCircleOutlined />}
+          icon={<CirclePlus size={14} />}
           onClick={() => handleAddGroup(null)}
         >
           添加顶级分组
@@ -426,7 +429,7 @@ const GroupManager: React.FC<GroupManagerProps> = ({
         {currentGroup && (
           <div>
             {currentGroup.parentId && (
-              <div style={{ marginBottom: 16, color: '#666' }}>
+              <div style={{ marginBottom: 16, color: token.colorTextSecondary }}>
                 父分组: {getGroupPath(currentGroup.parentId)}
               </div>
             )}
@@ -490,7 +493,7 @@ const GroupManager: React.FC<GroupManagerProps> = ({
               }}
               selectedKeys={newParentId ? [newParentId] : []}
               style={{ 
-                border: '1px solid #d9d9d9',
+                border: `1px solid ${token.colorBorder}`,
                 borderRadius: 6,
                 padding: 12,
                 maxHeight: 200,
@@ -500,7 +503,7 @@ const GroupManager: React.FC<GroupManagerProps> = ({
               <TreeNode 
                 key="__root__" 
                 title={
-                  <span style={{ color: newParentId === null ? '#1890ff' : undefined }}>
+                  <span style={{ color: newParentId === null ? token.colorPrimary : undefined }}>
                     顶级（无父分组）
                   </span>
                 } 

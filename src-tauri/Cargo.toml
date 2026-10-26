@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "1.6.0"
+version = "1.7.0"
 description = "工具箱 - 基于 Tauri 的轻量级通用工具集合"
 authors = ["工具箱开发者"]
 license = "MIT"

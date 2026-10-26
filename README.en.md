@@ -131,7 +131,7 @@ npm run build:tauri
 ```
 
 After building, packages are located in `src-tauri/target/release/bundle/`:
-- `nsis/工具箱_1.6.0_x64-setup.exe` - NSIS installer
+- `nsis/工具箱_1.7.0_x64-setup.exe` - NSIS installer
 - Portable version can run `src-tauri/target/release/app.exe` directly
 
 ## Config Persistence

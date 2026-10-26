@@ -131,7 +131,7 @@ npm run build:tauri
 ```
 
 构建完成后，安装包位于 `src-tauri/target/release/bundle/` 目录下：
-- `nsis/工具箱_1.6.0_x64-setup.exe` - NSIS 安装包
+- `nsis/工具箱_1.7.0_x64-setup.exe` - NSIS 安装包
 - 便携版可直接运行 `src-tauri/target/release/app.exe`
 
 ## 配置持久化

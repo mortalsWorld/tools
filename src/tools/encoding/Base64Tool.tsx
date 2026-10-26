@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Card, Input, Button, Space, message } from 'antd';
-import { CopyOutlined, ArrowRightOutlined } from '@ant-design/icons';
+import { Copy, ArrowRight, ArrowLeft } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const { TextArea } = Input;
 
@@ -47,7 +48,7 @@ export const Base64Tool: React.FC = () => {
             <Button
               type="text"
               size="small"
-              icon={<CopyOutlined />}
+              icon={<Copy size={14} />}
               onClick={copyPlainText}
               style={{ marginLeft: 8 }}
             >
@@ -62,10 +63,12 @@ export const Base64Tool: React.FC = () => {
           />
         </div>
         <Space>
-          <Button type="primary" icon={<ArrowRightOutlined />} onClick={encode}>
-            编码 →
-          </Button>
-          <Button icon={<ArrowRightOutlined rotate={180} />} onClick={decode}>
+          <motion.div whileTap={{ scale: 0.97 }} style={{ display: 'inline-flex' }}>
+            <Button type="primary" icon={<ArrowRight size={14} />} onClick={encode}>
+              编码 →
+            </Button>
+          </motion.div>
+          <Button icon={<ArrowLeft size={14} />} onClick={decode}>
             ← 解码
           </Button>
         </Space>
@@ -75,7 +78,7 @@ export const Base64Tool: React.FC = () => {
             <Button
               type="text"
               size="small"
-              icon={<CopyOutlined />}
+              icon={<Copy size={14} />}
               onClick={copyBase64}
               style={{ marginLeft: 8 }}
             >
