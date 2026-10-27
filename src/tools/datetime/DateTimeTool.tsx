@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Input, Button, Select, Space, message, Descriptions } from 'antd';
-import { Clock, Copy, ArrowLeftRight } from 'lucide-react';
+import { Input, Button, Segmented, message, theme } from 'antd';
+import { Clock, Copy, ArrowRight, ArrowLeft, CircleAlert } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const { Option } = Select;
+const MONO = "'JetBrains Mono', 'Cascadia Code', Monaco, Consolas, monospace";
 
 export const DateTimeTool: React.FC = () => {
   const [timestamp, setTimestamp] = useState<string>('');
   const [timestampUnit, setTimestampUnit] = useState<'s' | 'ms'>('ms');
   const [dateString, setDateString] = useState('');
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  const [tsError, setTsError] = useState('');
+  const [dateError, setDateError] = useState('');
+  const { token } = theme.useToken();
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -49,18 +52,19 @@ export const DateTimeTool: React.FC = () => {
         throw new Error('Invalid timestamp');
       }
       setDateString(formatDate(date, timestampUnit === 'ms'));
+      setTsError('');
       message.success('转换成功');
-    } catch (e) {
+    } catch {
+      setTsError('时间戳格式错误');
       message.error('时间戳格式错误');
     }
   };
 
   const dateToTimestamp = () => {
     try {
-      let date: Date;
       const msMatch = dateString.match(/\.(\d{1,3})$/);
       const cleanDateStr = msMatch ? dateString.substring(0, dateString.length - msMatch[0].length) : dateString;
-      date = new Date(cleanDateStr);
+      const date = new Date(cleanDateStr);
       if (isNaN(date.getTime())) {
         throw new Error('Invalid date');
       }
@@ -73,137 +77,204 @@ export const DateTimeTool: React.FC = () => {
         ts = Math.floor(ts / 1000);
       }
       setTimestamp(ts.toString());
+      setDateError('');
       message.success('转换成功');
-    } catch (e) {
+    } catch {
+      setDateError('日期格式错误');
       message.error('日期格式错误');
     }
   };
 
-  const copyTimestamp = () => {
-    navigator.clipboard.writeText(timestamp);
-    message.success('已复制到剪贴板');
-  };
-
-  const copyDate = () => {
-    navigator.clipboard.writeText(dateString);
+  const copyValue = (value: string) => {
+    if (!value) return;
+    navigator.clipboard.writeText(value);
     message.success('已复制到剪贴板');
   };
 
   const useCurrentTime = () => {
     const tsMs = currentTime;
     const ts = timestampUnit === 's' ? Math.floor(tsMs / 1000) : tsMs;
-    const date = new Date(tsMs);
     setTimestamp(ts.toString());
-    setDateString(formatDate(date, timestampUnit === 'ms'));
+    setDateString(formatDate(new Date(tsMs), timestampUnit === 'ms'));
+    setTsError('');
+    setDateError('');
     message.success('已获取当前时间');
   };
 
-  return (
-    <Card title="时间日期转换">
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
-        <Card size="small" title="当前时间">
-          <Descriptions bordered column={2}>
-            <Descriptions.Item label="时间戳 (ms)">
-              {currentTime}
-              <Button
-                type="text"
-                size="small"
-                icon={<Copy size={14} />}
-                onClick={() => {
-                  navigator.clipboard.writeText(currentTime.toString());
-                  message.success('已复制');
-                }}
-              />
-            </Descriptions.Item>
-            <Descriptions.Item label="时间戳 (s)">
-              {Math.floor(currentTime / 1000)}
-              <Button
-                type="text"
-                size="small"
-                icon={<Copy size={14} />}
-                onClick={() => {
-                  navigator.clipboard.writeText(Math.floor(currentTime / 1000).toString());
-                  message.success('已复制');
-                }}
-              />
-            </Descriptions.Item>
-            <Descriptions.Item label="当前日期" span={2}>
-              {new Date(currentTime).toLocaleString('zh-CN')}
-            </Descriptions.Item>
-          </Descriptions>
-        </Card>
+  const sectionLabel: React.CSSProperties = {
+    fontSize: 12,
+    fontWeight: 500,
+    color: token.colorTextTertiary,
+    letterSpacing: '0.02em',
+  };
 
-        <div>
-          <div style={{ marginBottom: 8 }}>
-            时间戳:
-            <Button
-              type="text"
-              size="small"
-              icon={<Copy size={14} />}
-              onClick={copyTimestamp}
-              style={{ marginLeft: 8 }}
+  const fieldLabel: React.CSSProperties = {
+    display: 'block',
+    marginBottom: 6,
+    fontSize: 12,
+    color: token.colorTextSecondary,
+  };
+
+  const errorRow: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+    fontSize: 12,
+    color: token.colorError,
+  };
+
+  const cardStyle: React.CSSProperties = {
+    background: token.colorBgElevated,
+    border: `1px solid ${token.colorBorderSecondary}`,
+    borderRadius: 10,
+    padding: 20,
+    minWidth: 0,
+  };
+
+  const copyRows = [
+    { label: '时间戳 (ms)', value: currentTime.toString() },
+    { label: '时间戳 (s)', value: Math.floor(currentTime / 1000).toString() },
+    { label: 'ISO 8601', value: new Date(currentTime).toISOString() },
+  ];
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16, alignItems: 'start' }}>
+      <style>{`
+.dt-row { transition: background 0.15s ease; }
+.dt-row:hover { background: ${token.colorBgLayout}; }
+`}</style>
+
+      <div style={{ ...cardStyle, borderLeft: `3px solid ${token.colorPrimary}` }}>
+        <div style={sectionLabel}>当前时间</div>
+        <div style={{
+          margin: '8px 0 16px',
+          fontFamily: MONO,
+          fontSize: 30,
+          letterSpacing: '-0.02em',
+          color: token.colorText,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}>
+          {formatDate(new Date(currentTime), false)}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {copyRows.map((row) => (
+            <div
+              key={row.label}
+              className="dt-row"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 8px',
+                borderRadius: 6,
+              }}
             >
-              复制
-            </Button>
-            <Button
-              type="text"
-              size="small"
-              icon={<Clock size={14} />}
-              onClick={useCurrentTime}
-              style={{ marginLeft: 8 }}
-            >
-              当前时间
-            </Button>
-          </div>
-          <Space style={{ width: '100%' }}>
-            <Input
-              value={timestamp}
-              onChange={(e) => setTimestamp(e.target.value)}
-              placeholder="请输入时间戳"
-              style={{ flex: 1 }}
-            />
-            <Select
-              value={timestampUnit}
-              onChange={setTimestampUnit}
-              style={{ width: 100 }}
-            >
-              <Option value="ms">毫秒</Option>
-              <Option value="s">秒</Option>
-            </Select>
-          </Space>
+              <span style={{ fontSize: 12, color: token.colorTextTertiary, width: 96, flexShrink: 0 }}>
+                {row.label}
+              </span>
+              <span style={{
+                flex: 1,
+                minWidth: 0,
+                fontFamily: MONO,
+                fontSize: 12,
+                color: token.colorText,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}>
+                {row.value}
+              </span>
+              <Button
+                type="text"
+                size="small"
+                icon={<Copy size={13} />}
+                onClick={() => copyValue(row.value)}
+                style={{ padding: '0 4px', height: 20, flexShrink: 0 }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={cardStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 16 }}>
+          <span style={sectionLabel}>转换</span>
+          <Segmented
+            size="small"
+            value={timestampUnit}
+            onChange={(v) => setTimestampUnit(v as 's' | 'ms')}
+            options={[
+              { label: '毫秒', value: 'ms' },
+              { label: '秒', value: 's' },
+            ]}
+          />
         </div>
 
-        <Space>
+        <div style={{ marginBottom: 16 }}>
+          <span style={fieldLabel}>时间戳</span>
+          <Input
+            value={timestamp}
+            onChange={(e) => { setTimestamp(e.target.value); setTsError(''); }}
+            placeholder="请输入时间戳"
+            style={{ fontFamily: MONO, fontSize: 13 }}
+            suffix={
+              <Button
+                type="text"
+                size="small"
+                icon={<Clock size={13} />}
+                onClick={useCurrentTime}
+                style={{ padding: '0 4px', height: 18 }}
+              />
+            }
+          />
+          {tsError && (
+            <div style={errorRow}>
+              <CircleAlert size={14} />
+              <span>{tsError}</span>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
           <motion.div whileTap={{ scale: 0.97 }} style={{ display: 'inline-flex' }}>
-            <Button type="primary" icon={<ArrowLeftRight size={14} />} onClick={timestampToDate}>
+            <Button type="primary" icon={<ArrowRight size={14} />} iconPosition="end" onClick={timestampToDate}>
               时间戳 → 日期
             </Button>
           </motion.div>
-          <Button icon={<ArrowLeftRight size={14} />} onClick={dateToTimestamp}>
+          <Button icon={<ArrowLeft size={14} />} onClick={dateToTimestamp}>
             日期 → 时间戳
           </Button>
-        </Space>
+        </div>
 
         <div>
-          <div style={{ marginBottom: 8 }}>
-            日期:
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={fieldLabel}>日期</span>
             <Button
               type="text"
               size="small"
-              icon={<Copy size={14} />}
-              onClick={copyDate}
-              style={{ marginLeft: 8 }}
-            >
-              复制
-            </Button>
+              icon={<Copy size={13} />}
+              onClick={() => copyValue(dateString)}
+              disabled={!dateString}
+              style={{ padding: '0 4px', height: 20 }}
+            />
           </div>
           <Input
             value={dateString}
-            onChange={(e) => setDateString(e.target.value)}
-            placeholder="如: 2024/01/01 12:00:00.000"
+            onChange={(e) => { setDateString(e.target.value); setDateError(''); }}
+            placeholder="2024/01/01 12:00:00.000"
+            style={{ fontFamily: MONO, fontSize: 13 }}
           />
+          {dateError && (
+            <div style={errorRow}>
+              <CircleAlert size={14} />
+              <span>{dateError}</span>
+            </div>
+          )}
         </div>
-      </Space>
-    </Card>
+      </div>
+    </div>
   );
 };

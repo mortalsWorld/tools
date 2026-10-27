@@ -1,8 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { Card, Input, Checkbox, Space, theme, ConfigProvider, Alert, Button, Tooltip, Tabs } from 'antd';
-import { Search, BookOpen, ArrowRight } from 'lucide-react';
+import { Input, theme, Tabs, Button, Tooltip, message } from 'antd';
+import { Search, BookOpen, ArrowRight, Copy, CircleAlert } from 'lucide-react';
+import { SplitPane } from '../common';
 
 const { TextArea } = Input;
+
+const MONO = "'JetBrains Mono', 'Cascadia Code', Monaco, Consolas, monospace";
 
 interface MatchInfo {
   match: string;
@@ -43,15 +46,24 @@ const regexSyntax = [
   { symbol: '|', desc: '或运算符' },
 ];
 
+const tabsStyle = `
+.regex-tabs { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.regex-tabs > .ant-tabs-nav { flex-shrink: 0; margin-bottom: 12px; }
+.regex-tabs > .ant-tabs-content-holder { flex: 1; min-height: 0; display: flex; }
+.regex-tabs .ant-tabs-content { height: 100%; }
+.regex-tabs .ant-tabs-tabpane { height: 100%; display: flex; flex-direction: column; }
+`;
+
 export const RegexTool: React.FC = () => {
   const [pattern, setPattern] = useState('');
   const [testText, setTestText] = useState('');
   const [flags, setFlags] = useState({ i: false, g: true, m: false });
+  const [activeTab, setActiveTab] = useState('test');
   const { token } = theme.useToken();
 
   const flagsString = useMemo(() => {
     return Object.entries(flags)
-      .filter(([_, enabled]) => enabled)
+      .filter(([, enabled]) => enabled)
       .map(([flag]) => flag)
       .join('');
   }, [flags]);
@@ -113,7 +125,7 @@ export const RegexTool: React.FC = () => {
             backgroundColor: token.colorPrimaryBg,
             color: token.colorPrimaryText,
             padding: '0 2px',
-            borderRadius: 2,
+            borderRadius: 3,
             border: `1px solid ${token.colorPrimaryBorder}`
           }}
         >
@@ -130,270 +142,339 @@ export const RegexTool: React.FC = () => {
     return <>{parts}</>;
   }, [pattern, testText, matches, error, token]);
 
-  return (
-    <ConfigProvider
-      theme={{
-        token: {
-          borderRadius: 8,
-        },
+  const surface: React.CSSProperties = {
+    background: token.colorBgLayout,
+    border: `1px solid ${token.colorBorderSecondary}`,
+    borderRadius: 10,
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
+    overflow: 'hidden',
+  };
+
+  const panelHeader: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '6px 12px',
+    borderBottom: `1px solid ${token.colorBorderSecondary}`,
+    flexShrink: 0,
+  };
+
+  const headerLabel: React.CSSProperties = {
+    fontSize: 12,
+    fontWeight: 500,
+    color: token.colorTextTertiary,
+    letterSpacing: '0.02em',
+  };
+
+  const headerMeta: React.CSSProperties = {
+    fontSize: 12,
+    color: token.colorTextTertiary,
+  };
+
+  const FlagChip: React.FC<{ active: boolean; label: string; onClick: () => void }> = ({ active, label, onClick }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: '4px 10px',
+        borderRadius: 6,
+        border: `1px solid ${active ? token.colorPrimaryBorder : token.colorBorderSecondary}`,
+        background: active ? token.colorPrimaryBg : 'transparent',
+        color: active ? token.colorPrimaryText : token.colorTextSecondary,
+        fontSize: 12,
+        cursor: 'pointer',
+        transition: 'all 0.15s ease',
       }}
     >
-      <Card
-        title="正则表达式测试"
-        style={{ height: '100%', minHeight: '500px' }}
-      >
-        <Space vertical style={{ width: '100%' }} size="large">
-          <div>
-            <div style={{ marginBottom: 8, fontWeight: 500 }}>正则表达式</div>
-            <Space.Compact style={{ width: '100%' }}>
-              <Input
-                prefix="/"
-                suffix={flagsString ? `/${flagsString}` : '/'}
-                value={pattern}
-                onChange={(e) => setPattern(e.target.value)}
-                placeholder="输入正则表达式"
-                status={error ? 'error' : undefined}
-                size="large"
-              />
-            </Space.Compact>
-            {error && (
-              <Alert
-                description={error}
-                type="error"
-                style={{ marginTop: 8 }}
-              />
+      {label}
+    </button>
+  );
+
+  const chip: React.CSSProperties = {
+    padding: '2px 8px',
+    borderRadius: 999,
+    fontSize: 12,
+    whiteSpace: 'nowrap',
+  };
+
+  const testPanel = (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 320 }}>
+      <SplitPane
+        left={
+          <div style={{ ...surface, flex: 1 }}>
+            <div style={panelHeader}>
+              <span style={headerLabel}>测试文本</span>
+              <span style={headerMeta}>{testText.length} 字符</span>
+            </div>
+            <TextArea
+              value={testText}
+              onChange={(e) => setTestText(e.target.value)}
+              placeholder="输入要测试的文本"
+              style={{
+                flex: 1,
+                minHeight: 0,
+                border: 'none',
+                boxShadow: 'none',
+                background: 'transparent',
+                borderRadius: 0,
+                padding: '10px 12px',
+                fontFamily: MONO,
+                fontSize: 13,
+                lineHeight: '20px',
+                resize: 'none',
+              }}
+            />
+          </div>
+        }
+        right={
+          <div style={{ ...surface, flex: 1 }}>
+            <div style={panelHeader}>
+              <span style={headerLabel}>高亮结果</span>
+              {matches.length > 0 && <span style={headerMeta}>{matches.length} 处匹配</span>}
+            </div>
+            {testText ? (
+              <div style={{
+                flex: 1,
+                minHeight: 0,
+                padding: '10px 12px',
+                overflow: 'auto',
+                fontFamily: MONO,
+                fontSize: 13,
+                lineHeight: '20px',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+                color: token.colorText,
+              }}>
+                {highlightedText}
+              </div>
+            ) : (
+              <div style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                color: token.colorTextTertiary,
+                fontSize: 12,
+              }}>
+                <Search size={22} strokeWidth={1.5} />
+                <span>匹配结果将显示在这里</span>
+              </div>
             )}
           </div>
+        }
+      />
+    </div>
+  );
 
-          <div>
-            <div style={{ marginBottom: 8, fontWeight: 500 }}>选项</div>
-            <Space>
-              <Checkbox
-                checked={flags.i}
-                onChange={(e) => setFlags({ ...flags, i: e.target.checked })}
-              >
-                忽略大小写 (i)
-              </Checkbox>
-              <Checkbox
-                checked={flags.g}
-                onChange={(e) => setFlags({ ...flags, g: e.target.checked })}
-              >
-                全局匹配 (g)
-              </Checkbox>
-              <Checkbox
-                checked={flags.m}
-                onChange={(e) => setFlags({ ...flags, m: e.target.checked })}
-              >
-                多行匹配 (m)
-              </Checkbox>
-            </Space>
+  const presetPanel = (
+    <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+      <div style={{ marginBottom: 12, color: token.colorTextSecondary, fontSize: 12 }}>
+        点击预设快速填充正则表达式，并自动切回测试
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+        {regexPresets.map((preset) => (
+          <div
+            key={preset.name}
+            className="regex-preset"
+            onClick={() => {
+              setPattern(preset.pattern);
+              setActiveTab('test');
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 12px',
+              borderRadius: 8,
+              border: `1px solid ${token.colorBorderSecondary}`,
+              background: token.colorBgLayout,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <span style={{ fontSize: 13, color: token.colorText }}>{preset.name}</span>
+            <ArrowRight size={14} style={{ color: token.colorTextTertiary }} />
           </div>
+        ))}
+      </div>
+    </div>
+  );
 
-          {matches.length > 0 && (
-            <Alert
-              description={`找到 ${matches.length} 个匹配`}
-              type="success"
-              icon={<Search size={16} />}
-            />
-          )}
-
-          <Tabs defaultActiveKey="test">
-            <Tabs.TabPane tab="测试" key="test">
-              <div style={{ display: 'flex', gap: 16, height: '350px' }}>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <div style={{
-                padding: '12px 16px',
-                background: token.colorBgLayout,
-                borderTopLeftRadius: 8,
-                borderTopRightRadius: 8,
-                border: `1px solid ${token.colorBorder}`,
-                borderBottom: 'none',
-                flexShrink: 0
-              }}>
-                <span style={{
-                  padding: '4px 10px',
-                  background: token.colorInfoBg,
-                  borderRadius: 4,
-                  fontSize: 12,
-                  color: token.colorInfo
-                }}>
-                  测试文本
-                </span>
-              </div>
-              <TextArea
-                value={testText}
-                onChange={(e) => setTestText(e.target.value)}
-                placeholder="输入要测试的文本"
-                style={{
-                  height: '100%',
-                  borderRadius: 0,
-                  borderBottomLeftRadius: 8,
-                  borderBottomRightRadius: 8,
-                  fontFamily: "'Monaco', 'Menlo', monospace",
-                  fontSize: 13,
-                  resize: 'none'
-                }}
-              />
-            </div>
-
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <div style={{
-                padding: '12px 16px',
-                background: token.colorBgLayout,
-                borderTopLeftRadius: 8,
-                borderTopRightRadius: 8,
-                border: `1px solid ${token.colorBorder}`,
-                borderBottom: 'none',
-                flexShrink: 0
-              }}>
-                <span style={{
-                  padding: '4px 10px',
-                  background: token.colorSuccessBg,
-                  borderRadius: 4,
-                  fontSize: 12,
-                  color: token.colorSuccess
-                }}>
-                  高亮结果
-                </span>
-              </div>
-              <div style={{
-                height: 'calc(100% - 44px)',
-                padding: '12px 16px',
-                border: `1px solid ${token.colorBorder}`,
-                borderBottomLeftRadius: 8,
-                borderBottomRightRadius: 8,
-                background: token.colorBgContainer,
-                overflow: 'auto',
-                fontFamily: "'Monaco', 'Menlo', monospace",
+  const syntaxPanel = (
+    <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <BookOpen size={16} style={{ color: token.colorInfo }} />
+        <span style={{ fontSize: 12, fontWeight: 500, color: token.colorTextTertiary, letterSpacing: '0.02em' }}>
+          正则表达式语法参考
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 8 }}>
+        {regexSyntax.map((item) => (
+          <Tooltip key={item.symbol} title={item.desc}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                gap: 10,
+                padding: '6px 10px',
+                borderRadius: 6,
+                cursor: 'help',
+              }}
+            >
+              <span style={{
+                fontFamily: MONO,
                 fontSize: 13,
-                lineHeight: 1.6,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-all'
-              }}>
-                {testText ? highlightedText : '结果将显示在这里'}
-              </div>
+                color: token.colorPrimary,
+                fontWeight: 500,
+                flexShrink: 0,
+              }}>{item.symbol}</span>
+              <span style={{ fontSize: 12, color: token.colorTextSecondary }}>{item.desc}</span>
             </div>
-          </div>
-            </Tabs.TabPane>
-            <Tabs.TabPane tab="常用预设" key="presets">
-              <div style={{ padding: 16, background: token.colorBgContainer, borderRadius: 8, border: `1px solid ${token.colorBorder}` }}>
-                <div style={{ marginBottom: 12, color: token.colorTextSecondary, fontSize: 14 }}>点击下方预设快速填充正则表达式：</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-                  {regexPresets.map((preset, index) => (
-                    <Button
-                      key={index}
-                      type="default"
-                      style={{
-                        justifyContent: 'flex-start',
-                        padding: '10px 16px',
-                        borderRadius: 8,
-                        border: `1px solid ${token.colorBorder}`,
-                        background: token.colorBgLayout
-                      }}
-                      onClick={() => setPattern(preset.pattern)}
-                    >
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontWeight: 500, color: token.colorText }}>{preset.name}</span>
-                        <ArrowRight size={14} style={{ color: token.colorTextSecondary }} />
-                      </span>
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </Tabs.TabPane>
-            <Tabs.TabPane tab="语法参考" key="syntax">
-              <div style={{ padding: 16, background: token.colorBgContainer, borderRadius: 8, border: `1px solid ${token.colorBorder}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                  <BookOpen size={18} style={{ color: token.colorInfo }} />
-                  <span style={{ fontWeight: 500, fontSize: 16, color: token.colorText }}>正则表达式语法参考</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-                  {regexSyntax.map((item, index) => (
-                    <Tooltip key={index} title={item.desc}>
-                      <div
-                        style={{
-                          padding: '10px 14px',
-                          background: token.colorBgLayout,
-                          borderRadius: 6,
-                          border: `1px solid ${token.colorBorder}`,
-                          cursor: 'help'
-                        }}
-                      >
-                        <span style={{
-                          fontFamily: "'Monaco', 'Menlo', monospace",
-                          fontSize: 14,
-                          color: token.colorPrimary,
-                          fontWeight: 500
-                        }}>{item.symbol}</span>
-                        <span style={{
-                          marginLeft: 12,
-                          fontSize: 13,
-                          color: token.colorTextSecondary
-                        }}>{item.desc}</span>
-                      </div>
-                    </Tooltip>
-                  ))}
-                </div>
-              </div>
-            </Tabs.TabPane>
-          </Tabs>
+          </Tooltip>
+        ))}
+      </div>
+    </div>
+  );
 
+  const copyAllMatches = () => {
+    if (matches.length === 0) return;
+    navigator.clipboard.writeText(matches.map((m) => m.match).join('\n'));
+    message.success('已复制全部匹配');
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
+      <style>{tabsStyle}</style>
+      <style>{`
+.regex-preset:hover {
+  border-color: ${token.colorPrimaryBorder} !important;
+  background: ${token.colorPrimaryBg} !important;
+  transform: translateY(-1px);
+}
+`}</style>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <Input
+          prefix="/"
+          suffix={flagsString ? `/${flagsString}` : '/'}
+          value={pattern}
+          onChange={(e) => setPattern(e.target.value)}
+          placeholder="输入正则表达式"
+          status={error ? 'error' : undefined}
+          size="large"
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <FlagChip active={flags.i} label="忽略大小写 i" onClick={() => setFlags({ ...flags, i: !flags.i })} />
+          <FlagChip active={flags.g} label="全局匹配 g" onClick={() => setFlags({ ...flags, g: !flags.g })} />
+          <FlagChip active={flags.m} label="多行匹配 m" onClick={() => setFlags({ ...flags, m: !flags.m })} />
+          <div style={{ flex: 1 }} />
           {matches.length > 0 && (
-            <div>
-              <div style={{ marginBottom: 8, fontWeight: 500 }}>匹配详情</div>
-              <div style={{
-                maxHeight: '200px',
-                overflow: 'auto',
-                padding: 12,
-                background: token.colorBgLayout,
-                borderRadius: 8,
-                border: `1px solid ${token.colorBorder}`
+            <span style={{ ...chip, background: token.colorSuccessBg, color: token.colorSuccess }}>
+              匹配 {matches.length} 处
+            </span>
+          )}
+          {testText.length > 0 && (
+            <span style={{ ...chip, background: token.colorFillTertiary, color: token.colorTextSecondary }}>
+              {testText.length} 字符
+            </span>
+          )}
+        </div>
+        {error && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: token.colorError, fontSize: 12 }}>
+            <CircleAlert size={14} />
+            <span>{error}</span>
+          </div>
+        )}
+      </div>
+
+      <Tabs
+        className="regex-tabs"
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        items={[
+          { key: 'test', label: '测试', children: testPanel },
+          { key: 'presets', label: '常用预设', children: presetPanel },
+          { key: 'syntax', label: '语法参考', children: syntaxPanel },
+        ]}
+      />
+
+      {matches.length > 0 && (
+        <div>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 8,
+          }}>
+            <span style={{ fontSize: 12, fontWeight: 500, color: token.colorTextTertiary, letterSpacing: '0.02em' }}>
+              匹配详情
+            </span>
+            <Button type="text" size="small" icon={<Copy size={13} />} onClick={copyAllMatches}>
+              复制全部匹配
+            </Button>
+          </div>
+          <div style={{
+            maxHeight: 200,
+            overflow: 'auto',
+            padding: 8,
+            background: token.colorBgLayout,
+            borderRadius: 8,
+            border: `1px solid ${token.colorBorderSecondary}`,
+          }}>
+            {matches.map((m, i) => (
+              <div key={i} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '6px 10px',
+                borderRadius: 6,
+                flexWrap: 'wrap',
               }}>
-                {matches.map((m, i) => (
-                  <div key={i} style={{
-                    padding: '8px 12px',
-                    background: token.colorBgContainer,
+                <span style={{
+                  width: 18,
+                  height: 18,
+                  borderRadius: '50%',
+                  background: token.colorPrimaryBg,
+                  color: token.colorPrimary,
+                  fontSize: 11,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}>{i + 1}</span>
+                <span style={{ fontSize: 12, color: token.colorTextTertiary, minWidth: 64 }}>
+                  位置 {m.index}
+                </span>
+                <span style={{
+                  fontFamily: MONO,
+                  fontSize: 13,
+                  color: token.colorPrimaryText,
+                  background: token.colorPrimaryBg,
+                  padding: '1px 6px',
+                  borderRadius: 4,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                }}>{m.match}</span>
+                {m.groups && Object.entries(m.groups).map(([key, value]) => (
+                  <span key={key} style={{
+                    fontSize: 12,
+                    padding: '1px 6px',
                     borderRadius: 4,
-                    marginBottom: 8,
-                    border: `1px solid ${token.colorBorder}`
+                    background: token.colorFillTertiary,
+                    color: token.colorTextSecondary,
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontWeight: 500 }}>匹配 {i + 1}</span>
-                      <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>
-                        位置: {m.index}
-                      </span>
-                    </div>
-                    <div style={{
-                      fontFamily: "'Monaco', 'Menlo', monospace",
-                      fontSize: 13,
-                      background: token.colorPrimaryBg,
-                      padding: '4px 8px',
-                      borderRadius: 4,
-                      color: token.colorPrimaryText
-                    }}>
-                      {m.match}
-                    </div>
-                    {m.groups && Object.keys(m.groups).length > 0 && (
-                      <div style={{ marginTop: 8 }}>
-                        <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 4 }}>分组:</div>
-                        {Object.entries(m.groups).map(([key, value]) => (
-                          <div key={key} style={{
-                            fontSize: 12,
-                            marginLeft: 16,
-                            color: token.colorText
-                          }}>
-                            <span style={{ color: token.colorInfo }}>{key}:</span> {value}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                    <span style={{ color: token.colorInfo }}>{key}</span>: {value}
+                  </span>
                 ))}
               </div>
-            </div>
-          )}
-        </Space>
-      </Card>
-    </ConfigProvider>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 };

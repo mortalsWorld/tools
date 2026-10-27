@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Card, Input, Button, Space, message, theme, ConfigProvider, Checkbox, Tooltip, Alert, Segmented } from 'antd';
-import { Copy, Minimize2, Maximize2, ArrowLeftRight, Eraser } from 'lucide-react';
+import { Input, Button, message, theme, Checkbox, Tooltip, Segmented } from 'antd';
+import { Copy, Minimize2, Maximize2, ArrowLeftRight, Eraser, Braces, Columns2, CircleAlert } from 'lucide-react';
 import { motion } from 'framer-motion';
 import hljs from 'highlight.js';
 import json from 'highlight.js/lib/languages/json';
 import xml from 'highlight.js/lib/languages/xml';
+import { SplitPane } from '../common';
 
 hljs.registerLanguage('json', json);
 hljs.registerLanguage('xml', xml);
 
 const { TextArea } = Input;
+
+const MONO = "'JetBrains Mono', 'Cascadia Code', Monaco, Consolas, monospace";
 
 interface ParseError {
   message: string;
@@ -21,12 +24,9 @@ export const CodeFormatter: React.FC = () => {
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [copied, setCopied] = useState(false);
-  const [leftWidth, setLeftWidth] = useState(50);
-  const [isDragging, setIsDragging] = useState(false);
   const [activeTab, setActiveTab] = useState('json');
   const { token } = theme.useToken();
   const codeRef = useRef<HTMLPreElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const [swapPanels, setSwapPanels] = useState(false);
 
   const [unicodeDecode, setUnicodeDecode] = useState(true);
@@ -48,7 +48,7 @@ export const CodeFormatter: React.FC = () => {
     const style = document.createElement('style');
     style.textContent = `
       .language-${language} .hljs {
-        background: ${token.colorBgContainer} !important;
+        background: transparent !important;
         color: ${token.colorText} !important;
         padding: 0 !important;
       }
@@ -67,27 +67,6 @@ export const CodeFormatter: React.FC = () => {
     return () => { document.head.removeChild(style); };
   }, [token, activeTab]);
 
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging || !containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const newWidth = ((e.clientX - rect.left) / rect.width) * 100;
-      setLeftWidth(Math.min(Math.max(newWidth, 20), 80));
-    };
-
-    const handleMouseUp = () => setIsDragging(false);
-
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging]);
-
   const getErrorPosition = (text: string, offset: number): { line: number; column: number } => {
     let line = 1;
     let column = 1;
@@ -105,7 +84,7 @@ export const CodeFormatter: React.FC = () => {
     } catch (e) {
       const error = e as SyntaxError;
       const positionMatch = error.message.match(/at position (\d+)/);
-      let offset = positionMatch ? parseInt(positionMatch[1], 10) : 0;
+      const offset = positionMatch ? parseInt(positionMatch[1], 10) : 0;
       const position = getErrorPosition(jsonString, offset);
       let cleanMessage = error.message;
       const tokenMatch = error.message.match(/Unexpected token (.+) in JSON/);
@@ -122,14 +101,14 @@ export const CodeFormatter: React.FC = () => {
     }
   };
 
-  const removeJsonComments = (json: string): string => {
+  const removeJsonComments = (jsonText: string): string => {
     const result: string[] = [];
     let i = 0;
     let inString = false;
     let escape = false;
 
-    while (i < json.length) {
-      const ch = json[i];
+    while (i < jsonText.length) {
+      const ch = jsonText[i];
 
       if (inString) {
         result.push(ch);
@@ -151,9 +130,9 @@ export const CodeFormatter: React.FC = () => {
         continue;
       }
 
-      if (ch === '/' && i + 1 < json.length && json[i + 1] === '/') {
+      if (ch === '/' && i + 1 < jsonText.length && jsonText[i + 1] === '/') {
         i += 2;
-        while (i < json.length && json[i] !== '\n') {
+        while (i < jsonText.length && jsonText[i] !== '\n') {
           i++;
         }
         continue;
@@ -161,7 +140,7 @@ export const CodeFormatter: React.FC = () => {
 
       if (ch === '#') {
         i++;
-        while (i < json.length && json[i] !== '\n') {
+        while (i < jsonText.length && jsonText[i] !== '\n') {
           i++;
         }
         continue;
@@ -244,16 +223,16 @@ export const CodeFormatter: React.FC = () => {
       let indent = 0;
       const tab = '  ';
       const tokens = xmlInput.split(/(<[^>]+>)/g);
-      for (const token of tokens) {
-        if (token.trim() === '') continue;
-        if (token.startsWith('</')) {
+      for (const item of tokens) {
+        if (item.trim() === '') continue;
+        if (item.startsWith('</')) {
           indent--;
-          formatted += tab.repeat(indent) + token + '\n';
-        } else if (token.startsWith('<') && !token.endsWith('/>')) {
-          formatted += tab.repeat(indent) + token + '\n';
+          formatted += tab.repeat(indent) + item + '\n';
+        } else if (item.startsWith('<') && !item.endsWith('/>')) {
+          formatted += tab.repeat(indent) + item + '\n';
           indent++;
-        } else if (token.trim() !== '') {
-          formatted += tab.repeat(indent) + token.trim() + '\n';
+        } else if (item.trim() !== '') {
+          formatted += tab.repeat(indent) + item.trim() + '\n';
         }
       }
       setOutput(formatted.trim());
@@ -304,118 +283,140 @@ export const CodeFormatter: React.FC = () => {
     return { lines, chars };
   }, [output]);
 
-  const leftPanel = (isJson: boolean) => {
-    const content = (
-      <div style={{
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        border: `1px solid ${token.colorBorder}`,
-        borderRadius: 8,
-        overflow: 'hidden',
-        background: token.colorBgContainer,
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '6px 12px',
-          background: token.colorBgLayout,
-          borderBottom: `1px solid ${token.colorBorderSecondary}`,
-          fontSize: 12,
-          color: token.colorTextSecondary,
-        }}>
-          <span style={{ fontWeight: 600, color: token.colorText }}>输入</span>
-          <span>{inputStats.lines} 行 · {inputStats.chars} 字符</span>
-        </div>
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <div
-            ref={lineNumbersRef}
-            style={{
-              width: 44,
-              padding: '10px 6px',
-              background: token.colorBgLayout,
-              borderRight: `1px solid ${token.colorBorderSecondary}`,
-              fontFamily: 'Monaco, Consolas, monospace',
-              fontSize: 12,
-              color: token.colorTextTertiary,
-              textAlign: 'right',
-              overflowY: 'hidden',
-              userSelect: 'none',
-              lineHeight: '20px',
-            }}
-          >
-            {input.split('\n').map((_, i) => (
-              <div key={i} style={{
-                height: 20,
-                lineHeight: '20px',
-                color: parseError && parseError.line === i + 1 ? token.colorError : undefined,
-                fontWeight: parseError && parseError.line === i + 1 ? 'bold' : undefined,
-              }}>
-                {i + 1}
-              </div>
-            ))}
-          </div>
-          <TextArea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onScroll={handleScrollSync}
-            placeholder={isJson ? '粘贴或输入 JSON 数据...' : '粘贴或输入 XML 数据...'}
-            autoSize={false}
-            style={{
-              flex: 1,
-              height: '100%',
-              fontFamily: 'Monaco, Consolas, monospace',
-              fontSize: 13,
-              lineHeight: '20px',
-              borderRadius: 0,
-              border: 'none',
-              boxShadow: 'none',
-              padding: '10px 12px',
-              resize: 'none',
-              background: 'transparent',
-            }}
-          />
-        </div>
-      </div>
-    );
-    return content;
+  const isJson = activeTab === 'json';
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (isJson) formatJson(); else formatXml();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, input, removeComments, quoteToDouble, removeEscape, unicodeDecode]);
+
+  const surface: React.CSSProperties = {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
+    border: `1px solid ${token.colorBorderSecondary}`,
+    borderRadius: 10,
+    overflow: 'hidden',
+    background: token.colorBgLayout,
   };
 
-  const rightPanel = (isJson: boolean) => {
-    const content = (
-      <div style={{
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        border: `1px solid ${token.colorBorder}`,
-        borderRadius: 8,
-        overflow: 'hidden',
-        background: token.colorBgContainer,
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '6px 12px',
-          background: token.colorBgLayout,
-          borderBottom: `1px solid ${token.colorBorderSecondary}`,
-          fontSize: 12,
-          color: token.colorTextSecondary,
-        }}>
-          <span style={{ fontWeight: 600, color: token.colorText }}>输出</span>
-          <span>{outputStats.lines} 行 · {outputStats.chars} 字符</span>
+  const panelHeader: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '6px 12px',
+    borderBottom: `1px solid ${token.colorBorderSecondary}`,
+    flexShrink: 0,
+  };
+
+  const headerLabel: React.CSSProperties = {
+    fontSize: 12,
+    fontWeight: 500,
+    color: token.colorTextTertiary,
+    letterSpacing: '0.02em',
+  };
+
+  const headerMeta: React.CSSProperties = {
+    fontSize: 12,
+    color: token.colorTextTertiary,
+  };
+
+  const inputPanel = (
+    <div style={{ ...surface }}>
+      <div style={panelHeader}>
+        <span style={headerLabel}>输入</span>
+        <span style={headerMeta}>{inputStats.lines} 行 · {inputStats.chars} 字符</span>
+      </div>
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        <div
+          ref={lineNumbersRef}
+          style={{
+            width: 44,
+            padding: '10px 6px',
+            background: token.colorFillQuaternary,
+            borderRight: `1px solid ${token.colorBorderSecondary}`,
+            fontFamily: MONO,
+            fontSize: 12,
+            color: token.colorTextTertiary,
+            textAlign: 'right',
+            overflowY: 'hidden',
+            userSelect: 'none',
+            lineHeight: '20px',
+            flexShrink: 0,
+          }}
+        >
+          {input.split('\n').map((_, i) => (
+            <div key={i} style={{
+              height: 20,
+              lineHeight: '20px',
+              color: parseError && parseError.line === i + 1 ? token.colorError : undefined,
+              fontWeight: parseError && parseError.line === i + 1 ? 'bold' : undefined,
+            }}>
+              {i + 1}
+            </div>
+          ))}
         </div>
+        <TextArea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onScroll={handleScrollSync}
+          placeholder={isJson ? '粘贴或输入 JSON 数据...' : '粘贴或输入 XML 数据...'}
+          autoSize={false}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            fontFamily: MONO,
+            fontSize: 13,
+            lineHeight: '20px',
+            borderRadius: 0,
+            border: 'none',
+            boxShadow: 'none',
+            padding: '10px 12px',
+            resize: 'none',
+            background: 'transparent',
+          }}
+        />
+      </div>
+    </div>
+  );
+
+  const outputPanel = (
+    <div style={{ ...surface }}>
+      <div style={panelHeader}>
+        <span style={headerLabel}>输出</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={headerMeta}>{outputStats.lines} 行 · {outputStats.chars} 字符</span>
+          {output && (
+            <Button
+              type="text"
+              size="small"
+              icon={<Copy size={13} />}
+              onClick={handleCopy}
+              style={{ padding: '0 4px', height: 20 }}
+            />
+          )}
+        </div>
+      </div>
+      {output ? (
         <pre
           ref={codeRef}
           className={`language-${isJson ? 'json' : 'xml'}`}
           style={{
             flex: 1,
+            minHeight: 0,
             margin: 0,
             padding: '10px 12px',
             background: 'transparent',
             overflow: 'auto',
-            fontFamily: 'Monaco, Consolas, monospace',
+            fontFamily: MONO,
             fontSize: 13,
             lineHeight: '20px',
             whiteSpace: 'pre',
@@ -423,187 +424,147 @@ export const CodeFormatter: React.FC = () => {
         >
           {output}
         </pre>
-      </div>
-    );
-    return content;
-  };
-
-  const editorArea = (isJson: boolean) => {
-    const left = leftPanel(isJson);
-    const right = rightPanel(isJson);
-    const panels = swapPanels ? [right, left] : [left, right];
-    return (
-      <div ref={containerRef} style={{
-        display: 'flex',
-        flex: 1,
-        minHeight: 420,
-        padding: '0 16px 16px',
-        gap: 0,
-      }}>
-        <div style={{ width: `${leftWidth}%`, minWidth: 200, display: 'flex' }}>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-            {panels[0]}
-          </div>
+      ) : (
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          color: token.colorTextTertiary,
+          fontSize: 12,
+        }}>
+          <Braces size={22} strokeWidth={1.5} />
+          <span>格式化结果将显示在这里</span>
         </div>
-        <div
-          style={{
-            width: 6,
-            cursor: 'col-resize',
-            background: isDragging ? token.colorPrimaryBg : 'transparent',
-            borderRadius: 3,
-            transition: 'background 0.15s',
-            flexShrink: 0,
-          }}
-          onMouseDown={() => setIsDragging(true)}
-          onMouseEnter={(e) => { if (!isDragging) e.currentTarget.style.background = token.colorPrimaryBorderHover; }}
-          onMouseLeave={(e) => { if (!isDragging) e.currentTarget.style.background = 'transparent'; }}
-        />
-        <div style={{ width: `${100 - leftWidth}%`, minWidth: 200, display: 'flex', flex: 1 }}>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-            {panels[1]}
-          </div>
-        </div>
-      </div>
-    );
-  };
+      )}
+    </div>
+  );
 
-  const isJson = activeTab === 'json';
+  const optionChipStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '2px 10px',
+    borderRadius: 6,
+    background: token.colorBgContainer,
+    border: `1px solid ${token.colorBorderSecondary}`,
+  };
 
   return (
-    <ConfigProvider theme={{ token: { borderRadius: 8 } }}>
-      <div style={{ padding: '12px 16px', height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <Card
-          styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', height: '100%' } }}
-          style={{
-            flex: 1,
-            minHeight: 0,
-          }}
-          title={
-            <span style={{ fontWeight: 600, fontSize: 15 }}>代码格式化</span>
-          }
-          extra={
-            <Space size={4}>
-              <Segmented
-                size="small"
-                value={activeTab}
-                onChange={(v) => setActiveTab(v as string)}
-                options={[
-                  { label: 'JSON', value: 'json' },
-                  { label: 'XML', value: 'xml' },
-                ]}
-              />
-              <div style={{ width: 1, height: 20, background: token.colorBorder, margin: '0 4px' }} />
-              <Tooltip title={swapPanels ? '左侧输入/右侧输出' : '左侧输出/右侧输入'}>
-                <Button
-                  size="small"
-                  icon={<ArrowLeftRight size={14} />}
-                  onClick={() => setSwapPanels(!swapPanels)}
-                  type={swapPanels ? 'primary' : 'default'}
-                >
-                  {swapPanels ? '右左' : '左右'}
-                </Button>
-              </Tooltip>
-              <div style={{ width: 1, height: 20, background: token.colorBorder, margin: '0 4px' }} />
-              <motion.div whileTap={{ scale: 0.97 }} style={{ display: 'inline-flex' }}>
-                <Button
-                  size="small"
-                  type="primary"
-                  icon={<Maximize2 size={14} />}
-                  onClick={isJson ? formatJson : formatXml}
-                >
-                  格式化
-                </Button>
-              </motion.div>
-              {isJson && (
-                <Button
-                  size="small"
-                  icon={<Minimize2 size={14} />}
-                  onClick={compressJson}
-                >
-                  压缩
-                </Button>
-              )}
-              <Button
-                size="small"
-                icon={<Copy size={14} />}
-                onClick={handleCopy}
-                disabled={!output}
-              >
-                {copied ? '已复制' : '复制'}
-              </Button>
-              <Button
-                size="small"
-                icon={<ArrowLeftRight size={14} />}
-                onClick={handleSwap}
-                disabled={!output}
-              >
-                交换
-              </Button>
-              <Button
-                size="small"
-                icon={<Eraser size={14} />}
-                onClick={handleClear}
-              >
-                清空
-              </Button>
-            </Space>
-          }
-        >
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+        <Segmented
+          value={activeTab}
+          onChange={(v) => setActiveTab(v as string)}
+          options={[
+            { label: 'JSON', value: 'json' },
+            { label: 'XML', value: 'xml' },
+          ]}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <motion.div whileTap={{ scale: 0.97 }} style={{ display: 'inline-flex' }}>
+            <Button
+              type="primary"
+              icon={<Maximize2 size={14} />}
+              onClick={isJson ? formatJson : formatXml}
+            >
+              格式化
+            </Button>
+          </motion.div>
           {isJson && (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-              <div style={{
-                padding: '10px 16px',
-                borderBottom: `1px solid ${token.colorBorderSecondary}`,
-                background: token.colorBgLayout,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: token.colorText }}>选项</span>
-                  <Checkbox checked={unicodeDecode} onChange={(e) => setUnicodeDecode(e.target.checked)}>
-                    Unicode解码
-                  </Checkbox>
-                  <Checkbox checked={quoteToDouble} onChange={(e) => setQuoteToDouble(e.target.checked)}>
-                    单引号转双引号
-                  </Checkbox>
-                  <Checkbox checked={removeEscape} onChange={(e) => setRemoveEscape(e.target.checked)}>
-                    去掉转义
-                  </Checkbox>
-                  <Checkbox checked={removeComments} onChange={(e) => setRemoveComments(e.target.checked)}>
-                    移除注释(#/ //)
-                  </Checkbox>
-                </div>
-              </div>
-
-              {parseError && (
-                <Alert
-                  message={
-                    <span style={{ fontWeight: 600, color: token.colorError }}>
-                      JSON 解析错误
-                    </span>
-                  }
-                  description={
-                    <div style={{ fontSize: 13 }}>
-                      <div>{parseError.message}</div>
-                      <div style={{ marginTop: 4, color: token.colorError, fontSize: 12 }}>
-                        位置：第 {parseError.line} 行，第 {parseError.column} 列
-                      </div>
-                    </div>
-                  }
-                  type="error"
-                  showIcon
-                  style={{ margin: '8px 16px 0' }}
-                />
-              )}
-
-              {editorArea(true)}
-            </div>
+            <Button icon={<Minimize2 size={14} />} onClick={compressJson}>
+              压缩
+            </Button>
           )}
-          {!isJson && (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-              {editorArea(false)}
-            </div>
-          )}
-        </Card>
+          <Button
+            icon={<Copy size={14} />}
+            onClick={handleCopy}
+            disabled={!output}
+          >
+            {copied ? '已复制' : '复制'}
+          </Button>
+          <Button
+            icon={<ArrowLeftRight size={14} />}
+            onClick={handleSwap}
+            disabled={!output}
+          >
+            交换
+          </Button>
+          <Tooltip title="交换输入 / 输出面板位置">
+            <Button
+              icon={<Columns2 size={14} />}
+              type={swapPanels ? 'primary' : 'default'}
+              onClick={() => setSwapPanels(!swapPanels)}
+            />
+          </Tooltip>
+          <Button icon={<Eraser size={14} />} onClick={handleClear}>
+            清空
+          </Button>
+        </div>
       </div>
-    </ConfigProvider>
+
+      {isJson && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          flexWrap: 'wrap',
+          padding: '6px 10px',
+          background: token.colorBgLayout,
+          borderRadius: 8,
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 500, color: token.colorTextTertiary, letterSpacing: '0.02em' }}>
+            选项
+          </span>
+          <span style={optionChipStyle}>
+            <Checkbox checked={unicodeDecode} onChange={(e) => setUnicodeDecode(e.target.checked)}>
+              Unicode解码
+            </Checkbox>
+          </span>
+          <span style={optionChipStyle}>
+            <Checkbox checked={quoteToDouble} onChange={(e) => setQuoteToDouble(e.target.checked)}>
+              单引号转双引号
+            </Checkbox>
+          </span>
+          <span style={optionChipStyle}>
+            <Checkbox checked={removeEscape} onChange={(e) => setRemoveEscape(e.target.checked)}>
+              去掉转义
+            </Checkbox>
+          </span>
+          <span style={optionChipStyle}>
+            <Checkbox checked={removeComments} onChange={(e) => setRemoveComments(e.target.checked)}>
+              移除注释(#/ //)
+            </Checkbox>
+          </span>
+        </div>
+      )}
+
+      {parseError && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '6px 10px',
+          borderRadius: 6,
+          background: token.colorErrorBg,
+          color: token.colorError,
+          fontSize: 12,
+        }}>
+          <CircleAlert size={14} />
+          <span style={{ fontWeight: 500 }}>JSON 解析错误：{parseError.message}</span>
+          <span style={{ color: token.colorError, opacity: 0.8 }}>
+            第 {parseError.line} 行，第 {parseError.column} 列
+          </span>
+        </div>
+      )}
+
+      <div style={{ flex: 1, minHeight: 320, display: 'flex', flexDirection: 'column' }}>
+        <SplitPane
+          left={swapPanels ? outputPanel : inputPanel}
+          right={swapPanels ? inputPanel : outputPanel}
+        />
+      </div>
+    </div>
   );
 };

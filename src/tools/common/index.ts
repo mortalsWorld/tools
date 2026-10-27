@@ -59,6 +59,9 @@ export type { SortableItemBaseProps } from './components/SortableItemBase';
 export { BatchMoveModal } from './components/BatchMoveModal';
 export type { BatchMoveModalProps } from './components/BatchMoveModal';
 
+export { SplitPane } from './components/SplitPane';
+export type { SplitPaneProps } from './components/SplitPane';
+
 export {
   LUCIDE_ICON_BY_NAME,
   EMOJI_TO_LUCIDE,
