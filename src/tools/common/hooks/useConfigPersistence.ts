@@ -6,6 +6,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { BaseItem, Group, DEFAULT_GROUPS } from '../types';
 import { ensureSortOrder } from '../utils/groupUtils';
+import { migrateEmojiIcons } from '../emoji-icon-map';
 
 export interface UseConfigPersistenceOptions<T extends BaseItem> {
   configFileName: string;
@@ -58,8 +59,12 @@ export function useConfigPersistence<T extends BaseItem>(
           description: item.description || undefined,
           sortOrder: item.sortOrder !== undefined ? item.sortOrder : index,
         }));
-        console.log(`[useConfigPersistence] 加载 items 完成，共 ${compatibleItems.length} 个`);
-        setItems(compatibleItems);
+        // 旧版 emoji 图标自动迁移为 Lucide 图标
+        const migratedItems = migrateEmojiIcons<T>(compatibleItems);
+        const migratedCount = migratedItems.filter((m, i) => m.icon !== compatibleItems[i].icon).length;
+        console.log(`[useConfigPersistence] 加载 items 完成，共 ${migratedItems.length} 个` +
+          (migratedCount > 0 ? `，迁移 emoji 图标 ${migratedCount} 个` : ''));
+        setItems(migratedItems);
 
         // 加载 groups，确保向后兼容
         const savedGroups = savedData.groups || defaultGroups;
@@ -67,6 +72,14 @@ export function useConfigPersistence<T extends BaseItem>(
         console.log(`[useConfigPersistence] 加载 groups 完成，共 ${compatibleGroups.length} 个:`, compatibleGroups);
         if (compatibleGroups.length > 0) {
           setGroups(compatibleGroups);
+        }
+
+        // 迁移发生后回写配置，避免重复迁移
+        if (migratedCount > 0) {
+          window.electronAPI?.saveConfig(configFileName, {
+            items: migratedItems,
+            groups: compatibleGroups.length > 0 ? compatibleGroups : savedGroups,
+          });
         }
       } else {
         console.log(`[useConfigPersistence] 没有找到保存的配置，使用默认值`);

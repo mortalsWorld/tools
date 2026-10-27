@@ -10,6 +10,7 @@ import { GripVertical, Pencil, Trash2 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { BaseItem } from '../types';
+import { LUCIDE_ICON_BY_NAME } from '../emoji-icon-map';
 
 export interface SortableItemBaseProps<T extends BaseItem> {
   id: string;
@@ -77,33 +78,40 @@ export function SortableItemBase<T extends BaseItem>(props: SortableItemBaseProp
     </div>
   );
 
-  // 默认图标渲染
-  const defaultIcon = (item: T) => (
-    item.iconData && item.iconData.length > 0 ? (
-      <img
-        src={item.iconData}
-        alt="icon"
-        style={{
-          maxWidth: viewMode === 'grid' ? 48 : 32,
-          maxHeight: viewMode === 'grid' ? 48 : 32,
-          objectFit: 'contain',
-        }}
-        onError={(e) => {
-          console.error('Failed to load icon:', item.iconData);
-          e.currentTarget.style.display = 'none';
-          const parent = e.currentTarget.parentElement;
-          if (parent) {
-            const fallbackSpan = document.createElement('span');
-            fallbackSpan.textContent = item.icon;
-            fallbackSpan.style.fontSize = viewMode === 'grid' ? '48px' : '32px';
-            parent.appendChild(fallbackSpan);
-          }
-        }}
-      />
-    ) : (
-      <span style={{ fontSize: viewMode === 'grid' ? 48 : 32 }}>{item.icon}</span>
-    )
-  );
+  // 默认图标渲染：自定义图片 > Lucide 图标 > 兼容旧版 emoji
+  const defaultIcon = (item: T) => {
+    const boxSize = viewMode === 'grid' ? 48 : 32;
+    if (item.iconData && item.iconData.length > 0) {
+      return (
+        <img
+          src={item.iconData}
+          alt="icon"
+          style={{
+            maxWidth: boxSize,
+            maxHeight: boxSize,
+            objectFit: 'contain',
+          }}
+          onError={(e) => {
+            console.error('Failed to load icon:', item.iconData);
+            e.currentTarget.style.display = 'none';
+            const parent = e.currentTarget.parentElement;
+            if (parent) {
+              const fallbackSpan = document.createElement('span');
+              fallbackSpan.style.display = 'inline-block';
+              fallbackSpan.style.width = `${boxSize}px`;
+              fallbackSpan.style.height = `${boxSize}px`;
+              parent.appendChild(fallbackSpan);
+            }
+          }}
+        />
+      );
+    }
+    if (item.icon.startsWith('lucide:')) {
+      const Cmp = LUCIDE_ICON_BY_NAME[item.icon.slice(7)];
+      if (Cmp) return <Cmp size={boxSize} />;
+    }
+    return <span style={{ fontSize: boxSize }}>{item.icon}</span>;
+  };
 
   const tooltipContent = renderTooltip ? renderTooltip(item) : defaultTooltip(item);
   const iconContent = renderIcon ? renderIcon(item) : defaultIcon(item);

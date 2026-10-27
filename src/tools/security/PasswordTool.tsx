@@ -29,74 +29,8 @@ import {
   Check,
   KeyRound,
   LayoutGrid,
-  Lock,
   Globe,
-  Mail,
-  CreditCard,
-  Landmark,
-  Briefcase,
-  Smartphone,
-  Laptop,
-  Monitor,
-  Gamepad2,
-  AudioLines,
-  Palette,
-  Clapperboard,
-  Camera,
-  BookOpen,
-  FileText,
-  Star,
-  Flame,
-  Heart,
-  Coffee,
-  Plane,
-  Cloud,
-  Wifi,
-  Database,
-  Server,
-  Terminal,
-  Code,
-  GitBranch,
-  MessageCircle,
-  ShoppingCart,
-  Shield,
-  LockOpen,
-  KeySquare,
-  Vault,
-  GlobeLock,
-  Link,
-  Send,
-  AtSign,
-  Wallet,
-  PiggyBank,
-  Banknote,
-  Coins,
-  Receipt,
-  Calculator,
-  Folder,
-  FolderOpen,
-  Archive,
-  Calendar,
-  ClipboardList,
-  Presentation,
-  Tv,
-  Printer,
-  HardDrive,
-  Battery,
-  Bot,
-  Cpu,
-  Container,
-  House,
-  Car,
-  Bike,
-  MapPin,
-  UtensilsCrossed,
-  Film,
-  Headphones,
-  Trophy,
-  Rss,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import {
   DndContext,
@@ -121,34 +55,16 @@ import {
   useBatchSelection,
   useConfigPersistence,
   getDescendantGroupIds,
+  LUCIDE_ICON_BY_NAME,
+  DEFAULT_PASSWORD_ICON,
 } from '../common';
 
 const { Text } = Typography;
 const { Option } = Select;
 
-/** Lucide 默认图标集（名称 → 组件），存储值为 `lucide:<名称>` */
-const LUCIDE_ICON_BY_NAME: Record<string, LucideIcon> = {
-  // 安全/账户
-  KeyRound, ShieldCheck, Shield, Lock, LockOpen, KeySquare, Vault,
-  // 网站/社交
-  Globe, GlobeLock, Link, Mail, Send, MessageCircle, AtSign, Rss,
-  // 金融/支付
-  CreditCard, Landmark, Wallet, PiggyBank, Banknote, Coins, Receipt, Calculator,
-  // 工作/办公
-  Briefcase, Folder, FolderOpen, Archive, Calendar, ClipboardList, Presentation,
-  // 设备/硬件
-  Smartphone, Laptop, Monitor, Tv, Printer, HardDrive, Battery,
-  // 开发/服务器
-  Terminal, Code, GitBranch, Database, Server, Cloud, Wifi, Bot, Cpu, Container,
-  // 生活
-  House, Car, Bike, Plane, MapPin, Coffee, UtensilsCrossed, ShoppingCart,
-  // 娱乐/文化
-  Gamepad2, AudioLines, Film, Camera, Headphones, Palette, Clapperboard, Trophy,
-  BookOpen, FileText, Star, Flame, Heart,
-};
 const DEFAULT_PASSWORD_ICONS = Object.entries(LUCIDE_ICON_BY_NAME);
 
-const DEFAULT_ICON_VALUE = 'lucide:KeyRound';
+const DEFAULT_ICON_VALUE = DEFAULT_PASSWORD_ICON;
 
 /** 统一渲染条目图标：自定义图片 > Lucide 图标 > 兼容旧版 emoji 数据 */
 const renderEntryIcon = (
@@ -841,7 +757,7 @@ export const PasswordTool: React.FC = () => {
             >
               {filteredItems.length === 0 ? (
                 <Empty
-                  image={<div style={{ fontSize: 64 }}>🔐</div>}
+                  image={<ShieldCheck size={64} style={{ color: token.colorPrimary, opacity: 0.4 }} />}
                   description={
                     searchText
                       ? '没有找到匹配的密码'

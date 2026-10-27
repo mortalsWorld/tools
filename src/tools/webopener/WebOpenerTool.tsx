@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+﻿import React, { useState, useCallback, useMemo } from 'react';
 import {
   Card,
   Button,
@@ -50,24 +50,15 @@ import {
   useBatchSelection,
   useConfigPersistence,
   getDescendantGroupIds,
+  LUCIDE_ICON_BY_NAME,
+  DEFAULT_WEB_ICON,
 } from '../common';
 
 const { Text } = Typography;
 const { TreeNode } = TreeSelect;
 
-// 网页特有图标
-const DEFAULT_WEB_ICONS = [
-  '🌐', '💻', '📱', '🎮', '📺', '🎵', '🎨', '🎬',
-  '📊', '📈', '📉', '📖', '📝', '✏️', '📌', '🔖',
-  '✨', '🌟', '💫', '⭐', '🔥', '💯', '👍', '🎉',
-  '🍎', '🍊', '🍇', '🍓', '🍕', '🍔', '☕', '🍵',
-  '🌸', '🌺', '🌻', '🌷', '🌼', '🌿', '🌲', '🌳',
-  '🏠', '🏢', '🏪', '🏬', '🏯', '🏰', '🗼', '🏛',
-  '🚗', '🚕', '🚙', '🚌', '🚲', '🚀', '✈️', '🚂',
-  '🎭', '🎪', '🎨', '🎯', '🎲', '🎰', '🎸', '🎤',
-  '🐱', '🐶', '🐰', '🦊', '🐻', '🐼', '🐨', '🦁',
-  '😊', '😍', '🥰', '🤩', '😎', '🤓', '🥳', '😄',
-];
+/** 可选图标集（共享 Lucide 注册表），存储值为 `lucide:<名称>` */
+const DEFAULT_WEB_ICONS = Object.entries(LUCIDE_ICON_BY_NAME);
 
 export const WebOpenerTool: React.FC = () => {
   const { token } = theme.useToken();
@@ -172,7 +163,7 @@ export const WebOpenerTool: React.FC = () => {
     id: '',
     name: '',
     url: '',
-    icon: '🌐',
+    icon: DEFAULT_WEB_ICON,
     group: 'default',
     iconData: undefined,
     description: undefined,
@@ -239,7 +230,7 @@ export const WebOpenerTool: React.FC = () => {
       id: Date.now().toString(),
       name: '',
       url: '',
-      icon: '🌐',
+      icon: DEFAULT_WEB_ICON,
       group: targetGroup,
       iconData: undefined,
       description: undefined,
@@ -556,7 +547,7 @@ export const WebOpenerTool: React.FC = () => {
             >
               {filteredItems.length === 0 ? (
                 <Empty
-                  image={<div style={{ fontSize: 64 }}>🌐</div>}
+                  image={<Globe size={64} style={{ color: token.colorPrimary, opacity: 0.4 }} />}
                   description={
                     selectedGroup === 'all'
                       ? '还没有添加任何网页快捷方式'
@@ -640,6 +631,8 @@ export const WebOpenerTool: React.FC = () => {
                           <div style={{ fontSize: 32 }}>
                             {item.iconData ? (
                               <img src={item.iconData} alt="icon" style={{ maxWidth: 32, maxHeight: 32 }} />
+                            ) : item.icon.startsWith('lucide:') && LUCIDE_ICON_BY_NAME[item.icon.slice(7)] ? (
+                              (() => { const Cmp = LUCIDE_ICON_BY_NAME[item.icon.slice(7)]; return <Cmp size={32} />; })()
                             ) : (
                               item.icon
                             )}
@@ -701,6 +694,8 @@ export const WebOpenerTool: React.FC = () => {
                         alt="preview"
                         style={{ maxWidth: 48, maxHeight: 48, objectFit: 'contain' }}
                       />
+                    ) : newItem.icon.startsWith('lucide:') && LUCIDE_ICON_BY_NAME[newItem.icon.slice(7)] ? (
+                      (() => { const Cmp = LUCIDE_ICON_BY_NAME[newItem.icon.slice(7)]; return <Cmp size={32} />; })()
                     ) : (
                       <span>{newItem.icon}</span>
                     )}
@@ -734,26 +729,30 @@ export const WebOpenerTool: React.FC = () => {
                   maxHeight: 180,
                   overflowY: 'auto',
                 }}>
-                  {DEFAULT_WEB_ICONS.map((icon) => (
-                    <div
-                      key={icon}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 24,
-                        padding: 8,
-                        borderRadius: 8,
-                        cursor: 'pointer',
-                        backgroundColor: newItem.icon === icon ? token.colorPrimaryBg : 'transparent',
-                        border: newItem.icon === icon ? `2px solid ${token.colorPrimary}` : '2px solid transparent',
-                        transition: 'all 0.2s',
-                      }}
-                      onClick={() => setNewItem(prev => ({ ...prev, icon }))}
-                    >
-                      {icon}
-                    </div>
-                  ))}
+                  {DEFAULT_WEB_ICONS.map(([name, Cmp]) => {
+                    const value = `lucide:${name}`;
+                    const selected = newItem.icon === value;
+                    return (
+                      <div
+                        key={name}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: 8,
+                          borderRadius: 8,
+                          cursor: 'pointer',
+                          color: selected ? token.colorPrimary : token.colorTextSecondary,
+                          backgroundColor: selected ? token.colorPrimaryBg : 'transparent',
+                          border: selected ? `2px solid ${token.colorPrimary}` : '2px solid transparent',
+                          transition: 'all 0.2s',
+                        }}
+                        onClick={() => setNewItem(prev => ({ ...prev, icon: value }))}
+                      >
+                        <Cmp size={20} />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               <div>
@@ -827,6 +826,8 @@ export const WebOpenerTool: React.FC = () => {
                           alt="preview"
                           style={{ maxWidth: 48, maxHeight: 48, objectFit: 'contain' }}
                         />
+                      ) : editingItem.icon.startsWith('lucide:') && LUCIDE_ICON_BY_NAME[editingItem.icon.slice(7)] ? (
+                        (() => { const Cmp = LUCIDE_ICON_BY_NAME[editingItem.icon.slice(7)]; return <Cmp size={32} />; })()
                       ) : (
                         <span>{editingItem.icon}</span>
                       )}
@@ -860,26 +861,30 @@ export const WebOpenerTool: React.FC = () => {
                     maxHeight: 180,
                     overflowY: 'auto',
                   }}>
-                    {DEFAULT_WEB_ICONS.map((icon) => (
-                      <div
-                        key={icon}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 24,
-                          padding: 8,
-                          borderRadius: 8,
-                          cursor: 'pointer',
-                          backgroundColor: editingItem.icon === icon ? token.colorPrimaryBg : 'transparent',
-                          border: editingItem.icon === icon ? `2px solid ${token.colorPrimary}` : '2px solid transparent',
-                          transition: 'all 0.2s',
-                        }}
-                        onClick={() => setEditingItem(prev => prev ? ({ ...prev, icon }) : null)}
-                      >
-                        {icon}
-                      </div>
-                    ))}
+                    {DEFAULT_WEB_ICONS.map(([name, Cmp]) => {
+                      const value = `lucide:${name}`;
+                      const selected = editingItem.icon === value;
+                      return (
+                        <div
+                          key={name}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 8,
+                            borderRadius: 8,
+                            cursor: 'pointer',
+                            color: selected ? token.colorPrimary : token.colorTextSecondary,
+                            backgroundColor: selected ? token.colorPrimaryBg : 'transparent',
+                            border: selected ? `2px solid ${token.colorPrimary}` : '2px solid transparent',
+                            transition: 'all 0.2s',
+                          }}
+                          onClick={() => setEditingItem(prev => prev ? ({ ...prev, icon: value }) : null)}
+                        >
+                          <Cmp size={20} />
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
                 <div>

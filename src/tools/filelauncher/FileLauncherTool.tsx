@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+﻿import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   Card,
   Button,
@@ -50,6 +50,9 @@ import {
   useBatchSelection,
   useConfigPersistence,
   getDescendantGroupIds,
+  LUCIDE_ICON_BY_NAME,
+  DEFAULT_FILE_ICON,
+  DEFAULT_FOLDER_ICON,
 } from '../common';
 
 const { Text } = Typography;
@@ -59,18 +62,8 @@ interface ElectronFile extends File {
   path?: string;
 }
 
-const DEFAULT_ICONS = [
-  '📄', '📁', '📝', '📊', '📈', '📉', '🎨', '🎭',
-  '🎬', '🎵', '🎶', '🎸', '🎹', '🎺', '🎻', '🎼',
-  '🎾', '🏀', '🏈', '⚽', '⚾', '🎿', '🏂', '🏃',
-  '🚗', '🚕', '🚙', '🚌', '🏎️', '🚓', '🚑', '🚒',
-  '📱', '📲', '📳', '📴', '☎️', '📞', '📟', '📠',
-  '💻', '🖥️', '🖨️', '⌨️', '🖱️', '🖲️', '💽', '💾',
-  '📀', '🎥', '🎞️', '📽️', '🎬', '📺', '📷', '📸',
-  '💡', '🔦', '🏮', '📔', '📕', '📖', '📗', '📘',
-  '📙', '📚', '📓', '📒', '📃', '📜', '📄', '📰',
-  '🔑', '🔒', '🔓', '🔐', '🔏', '🔎', '🔍', '🏠'
-];
+/** 可选图标集（共享 Lucide 注册表），存储值为 `lucide:<名称>` */
+const DEFAULT_ICONS = Object.entries(LUCIDE_ICON_BY_NAME);
 
 const FileLauncherTool: React.FC = () => {
   const { token } = theme.useToken();
@@ -174,7 +167,7 @@ const FileLauncherTool: React.FC = () => {
     name: '',
     path: '',
     type: 'file',
-    icon: '📄',
+    icon: DEFAULT_FILE_ICON,
     group: 'default',
     iconData: undefined,
     description: undefined,
@@ -331,7 +324,7 @@ const FileLauncherTool: React.FC = () => {
       name,
       path: filePath,
       type,
-      icon: type === 'directory' ? '📁' : '📄',
+      icon: type === 'directory' ? DEFAULT_FOLDER_ICON : DEFAULT_FILE_ICON,
       group: groupId,
       iconData: undefined,
       description: undefined,
@@ -473,7 +466,7 @@ const FileLauncherTool: React.FC = () => {
       name: '',
       path: '',
       type: 'file',
-      icon: '📄',
+      icon: DEFAULT_FILE_ICON,
       group: targetGroup,
       iconData: undefined,
       description: undefined,
@@ -561,7 +554,7 @@ const FileLauncherTool: React.FC = () => {
             path: validatedPath,
             name,
             type: isDirectory ? 'directory' : 'file',
-            icon: isDirectory ? '📁' : '📄',
+            icon: isDirectory ? DEFAULT_FOLDER_ICON : DEFAULT_FILE_ICON,
             iconData,
           }));
         } else if (isEditModalVisible && editingItem) {
@@ -570,7 +563,7 @@ const FileLauncherTool: React.FC = () => {
             path: validatedPath,
             name,
             type: isDirectory ? 'directory' : 'file',
-            icon: isDirectory ? '📁' : '📄',
+            icon: isDirectory ? DEFAULT_FOLDER_ICON : DEFAULT_FILE_ICON,
             iconData,
           }) : null);
         }
@@ -661,33 +654,40 @@ const FileLauncherTool: React.FC = () => {
   ), [groups, token]);
 
   // ========== 渲染 SortableItemBase 的图标 ==========
-  const renderIcon = useCallback((item: FileItem) => (
-    item.iconData && item.iconData.length > 0 ? (
-      <img
-        src={item.iconData}
-        alt="icon"
-        style={{
-          width: viewMode === 'grid' ? 48 : 32,
-          height: viewMode === 'grid' ? 48 : 32,
-          objectFit: 'contain',
-          display: 'block',
-        }}
-        onError={(e) => {
-          console.error('Failed to load icon:', item.iconData);
-          e.currentTarget.style.display = 'none';
-          const parent = e.currentTarget.parentElement;
-          if (parent) {
-            const fallbackSpan = document.createElement('span');
-            fallbackSpan.textContent = item.icon;
-            fallbackSpan.style.fontSize = viewMode === 'grid' ? '48px' : '32px';
-            parent.appendChild(fallbackSpan);
-          }
-        }}
-      />
-    ) : (
-      <span style={{ fontSize: viewMode === 'grid' ? 48 : 32 }}>{item.icon}</span>
-    )
-  ), [viewMode]);
+  const renderIcon = useCallback((item: FileItem) => {
+    const boxSize = viewMode === 'grid' ? 48 : 32;
+    if (item.iconData && item.iconData.length > 0) {
+      return (
+        <img
+          src={item.iconData}
+          alt="icon"
+          style={{
+            width: boxSize,
+            height: boxSize,
+            objectFit: 'contain',
+            display: 'block',
+          }}
+          onError={(e) => {
+            console.error('Failed to load icon:', item.iconData);
+            e.currentTarget.style.display = 'none';
+            const parent = e.currentTarget.parentElement;
+            if (parent) {
+              const fallbackSpan = document.createElement('span');
+              fallbackSpan.style.display = 'inline-block';
+              fallbackSpan.style.width = `${boxSize}px`;
+              fallbackSpan.style.height = `${boxSize}px`;
+              parent.appendChild(fallbackSpan);
+            }
+          }}
+        />
+      );
+    }
+    if (item.icon.startsWith('lucide:')) {
+      const Cmp = LUCIDE_ICON_BY_NAME[item.icon.slice(7)];
+      if (Cmp) return <Cmp size={boxSize} />;
+    }
+    return <span style={{ fontSize: boxSize }}>{item.icon}</span>;
+  }, [viewMode]);
 
   // ========== 渲染 SortableItemBase 的副标题 ==========
   const renderSubtitle = useCallback((item: FileItem) => (
@@ -968,6 +968,8 @@ const FileLauncherTool: React.FC = () => {
                           <div style={{ fontSize: 32 }}>
                             {item.iconData ? (
                               <img src={item.iconData} alt="icon" style={{ width: 32, height: 32, objectFit: 'contain' }} />
+                            ) : item.icon.startsWith('lucide:') && LUCIDE_ICON_BY_NAME[item.icon.slice(7)] ? (
+                              (() => { const Cmp = LUCIDE_ICON_BY_NAME[item.icon.slice(7)]; return <Cmp size={32} />; })()
                             ) : (
                               <span>{item.icon}</span>
                             )}
@@ -1016,7 +1018,7 @@ const FileLauncherTool: React.FC = () => {
               onChange={(e) => setNewItem(prev => ({
                 ...prev,
                 type: e.target.value,
-                icon: e.target.value === 'directory' ? '📁' : '📄',
+                icon: e.target.value === 'directory' ? DEFAULT_FOLDER_ICON : DEFAULT_FILE_ICON,
               }))}
               buttonStyle="solid"
             >
@@ -1100,26 +1102,30 @@ const FileLauncherTool: React.FC = () => {
               maxHeight: 180,
               overflowY: 'auto',
             }}>
-              {DEFAULT_ICONS.map((icon, index) => (
-                <div
-                  key={index}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 24,
-                    padding: 8,
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    backgroundColor: newItem.icon === icon ? token.colorPrimaryBg : 'transparent',
-                    border: newItem.icon === icon ? `2px solid ${token.colorPrimary}` : '2px solid transparent',
-                    transition: 'all 0.2s',
-                  }}
-                  onClick={() => setNewItem(prev => ({ ...prev, icon }))}
-                >
-                  {icon}
-                </div>
-              ))}
+              {DEFAULT_ICONS.map(([name, Cmp]) => {
+                const value = `lucide:${name}`;
+                const selected = newItem.icon === value;
+                return (
+                  <div
+                    key={name}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 8,
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      color: selected ? token.colorPrimary : token.colorTextSecondary,
+                      backgroundColor: selected ? token.colorPrimaryBg : 'transparent',
+                      border: selected ? `2px solid ${token.colorPrimary}` : '2px solid transparent',
+                      transition: 'all 0.2s',
+                    }}
+                    onClick={() => setNewItem(prev => ({ ...prev, icon: value }))}
+                  >
+                    <Cmp size={20} />
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -1167,7 +1173,7 @@ const FileLauncherTool: React.FC = () => {
                 onChange={(e) => setEditingItem(prev => prev ? ({
                   ...prev,
                   type: e.target.value,
-                  icon: e.target.value === 'directory' ? '📁' : '📄',
+                  icon: e.target.value === 'directory' ? DEFAULT_FOLDER_ICON : DEFAULT_FILE_ICON,
                 }) : null)}
                 buttonStyle="solid"
               >
@@ -1251,26 +1257,30 @@ const FileLauncherTool: React.FC = () => {
                 maxHeight: 180,
                 overflowY: 'auto',
               }}>
-                {DEFAULT_ICONS.map((icon, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 24,
-                      padding: 8,
-                      borderRadius: 8,
-                      cursor: 'pointer',
-                      backgroundColor: editingItem.icon === icon ? token.colorPrimaryBg : 'transparent',
-                      border: editingItem.icon === icon ? `2px solid ${token.colorPrimary}` : '2px solid transparent',
-                      transition: 'all 0.2s',
-                    }}
-                    onClick={() => setEditingItem(prev => prev ? ({ ...prev, icon }) : null)}
-                  >
-                    {icon}
-                  </div>
-                ))}
+                {DEFAULT_ICONS.map(([name, Cmp]) => {
+                  const value = `lucide:${name}`;
+                  const selected = editingItem.icon === value;
+                  return (
+                    <div
+                      key={name}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 8,
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                        color: selected ? token.colorPrimary : token.colorTextSecondary,
+                        backgroundColor: selected ? token.colorPrimaryBg : 'transparent',
+                        border: selected ? `2px solid ${token.colorPrimary}` : '2px solid transparent',
+                        transition: 'all 0.2s',
+                      }}
+                      onClick={() => setEditingItem(prev => prev ? ({ ...prev, icon: value }) : null)}
+                    >
+                      <Cmp size={20} />
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

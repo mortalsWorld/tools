@@ -58,3 +58,13 @@ export type { SortableItemBaseProps } from './components/SortableItemBase';
 
 export { BatchMoveModal } from './components/BatchMoveModal';
 export type { BatchMoveModalProps } from './components/BatchMoveModal';
+
+export {
+  LUCIDE_ICON_BY_NAME,
+  EMOJI_TO_LUCIDE,
+  migrateEmojiIcons,
+  DEFAULT_FILE_ICON,
+  DEFAULT_FOLDER_ICON,
+  DEFAULT_WEB_ICON,
+  DEFAULT_PASSWORD_ICON,
+} from './emoji-icon-map';

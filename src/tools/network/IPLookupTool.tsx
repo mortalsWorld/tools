@@ -568,7 +568,7 @@ export const IPLookupTool: React.FC = () => {
         {/* 错误面板 */}
         {errors.length > 0 && (
           <Alert
-            message={<span style={{ fontWeight: 'bold' }}>⚠️ 以下子网记录无法解析，已自动跳过（共{errors.length}条）</span>}
+            message={<span style={{ fontWeight: 'bold' }}>以下子网记录无法解析，已自动跳过（共{errors.length}条）</span>}
             description={
               <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
                 {errors.map((err, idx) => (
