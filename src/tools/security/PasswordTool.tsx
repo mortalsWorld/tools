@@ -568,7 +568,19 @@ export const PasswordTool: React.FC = () => {
       {item.url && (
         <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 6, lineHeight: 1.5 }}>
           <span style={{ fontWeight: 500, color: token.colorTextTertiary, display: 'block', marginBottom: 3 }}>网址：</span>
-          <span style={{ color: token.colorPrimary, wordBreak: 'break-all', fontFamily: 'Consolas, Monaco, monospace' }}>{item.url}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: token.colorPrimary, wordBreak: 'break-all', fontFamily: 'Consolas, Monaco, monospace' }}>{item.url}</span>
+            <span
+              style={{ cursor: 'pointer', color: token.colorPrimary, fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 2, flexShrink: 0 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(item.url!);
+                message.success('网址已复制');
+              }}
+            >
+              <Copy size={12} /> 复制
+            </span>
+          </div>
         </div>
       )}
       <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: item.description ? 6 : 0, lineHeight: 1.5 }}>
@@ -585,7 +597,13 @@ export const PasswordTool: React.FC = () => {
   ), [groups, token]);
 
   const renderPasswordSubtitle = useCallback((item: PasswordItem) => (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+    <span style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 4,
+      width: '100%',
+      justifyContent: viewMode === 'grid' ? 'center' : 'flex-start',
+    }}>
       <KeyRound size={13} />
       <span style={{ marginLeft: 4 }}>{item.username}</span>
       {item.username && (
@@ -601,11 +619,26 @@ export const PasswordTool: React.FC = () => {
         </span>
       )}
     </span>
-  ), [token.colorPrimary]);
+  ), [token.colorPrimary, viewMode]);
 
   const renderPasswordDetails = useCallback((item: PasswordItem) => (
     <Space size="middle" style={{ fontSize: 11 }}>
-      {item.url && <span style={{ color: token.colorTextTertiary }}>🌐 {item.url}</span>}
+      {item.url && (
+        <span style={{ color: token.colorTextTertiary, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <Globe size={12} />
+          <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.url}</span>
+          <span
+            style={{ cursor: 'pointer', color: token.colorPrimary, display: 'inline-flex', alignItems: 'center' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigator.clipboard.writeText(item.url!);
+              message.success('网址已复制');
+            }}
+          >
+            <Copy size={12} />
+          </span>
+        </span>
+      )}
       <span
         onClick={(e) => {
           e.stopPropagation();
