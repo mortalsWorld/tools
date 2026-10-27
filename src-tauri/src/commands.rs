@@ -1779,31 +1779,17 @@ pub async fn search_file_handle(args: SearchFileArgs) -> Vec<serde_json::Value> 
         return vec![];
     }
     
-    // PowerShell 字符串中的反斜杠需要转义，单引号需要双写以符合 WMI 过滤语法
-    let escaped_path = file_path.replace('\\', "\\\\").replace("'", "''");
-    log::debug!("[search_file_handle] 转义后的 WMI 路径: {}", escaped_path);
-    
     // 判断是否为完整路径（含盘符或路径分隔符）
     let is_full_path = file_path.contains(':') || file_path.contains('\\') || file_path.contains('/');
-    
     log::info!("[search_file_handle] 是否完整路径: {}", is_full_path);
-    
-    // 统一使用子串匹配（LIKE %xxx%），支持：
-    // - 完整路径：D:\xxx\app.exe
-    // - 仅文件名：app.exe
-    // - 模糊子串：app、logs、node 等
-    // 这样输入 "app" 也能匹配 "D:\app.exe"、"D:\myapp.exe"、"D:\xxx\app.exe" 等。
-    let where_clause = format!(
-        "ExecutablePath LIKE '%{0}%' OR ExecutablePath LIKE '%{0}' OR ExecutablePath LIKE '%{0}/%'",
-        escaped_path
+
+    // 安全修复（SEC-01）：不再把用户路径拼接进 PowerShell 脚本。
+    // 脚本仅负责取全量进程列表，路径的子串匹配（大小写不敏感）统一下沉到 Rust 端，
+    // 从根本上消除 `$(...)` 等 PowerShell 命令替换带来的任意命令执行风险。
+    let ps_script = String::from(
+        "$query = \"SELECT ProcessId, Name, ExecutablePath FROM Win32_Process WHERE ExecutablePath IS NOT NULL\"; \
+         Get-CimInstance -Query $query | Select-Object @{N='Id';E={$_.ProcessId}}, @{N='ProcessName';E={$_.Name}}, @{N='Path';E={$_.ExecutablePath}} | ConvertTo-Json -Compress"
     );
-    log::info!("[search_file_handle] WLIKE 子句: {}", where_clause);
-    
-    let ps_template = String::from(
-        "$query = \"SELECT ProcessId, Name, ExecutablePath FROM Win32_Process WHERE {WHERE}\"; \
-         Get-WmiObject -Query $query | Select-Object @{N='Id';E={$_.ProcessId}}, @{N='ProcessName';E={$_.Name}} | ConvertTo-Json -Compress"
-    );
-    let ps_script = ps_template.replace("{WHERE}", &where_clause);
     log::debug!("[search_file_handle] PowerShell 脚本: {}", ps_script);
     
     let result = Command::new("powershell")
@@ -1825,8 +1811,21 @@ pub async fn search_file_handle(args: SearchFileArgs) -> Vec<serde_json::Value> 
                 log::info!("[search_file_handle] 未找到匹配的进程（输入路径: {}）", file_path);
                 return vec![];
             }
-            
-            parse_powershell_json_output(&stdout, "search_file_handle")
+
+            // 安全修复（SEC-01）：路径匹配在 Rust 端完成，不依赖脚本内拼接的 WQL/LIKE
+            let results = parse_powershell_json_output(&stdout, "search_file_handle");
+            let needle = file_path.to_lowercase();
+            let filtered: Vec<serde_json::Value> = results
+                .into_iter()
+                .filter(|item| {
+                    item.get("Path")
+                        .and_then(|v| v.as_str())
+                        .map(|p| p.to_lowercase().contains(&needle))
+                        .unwrap_or(false)
+                })
+                .collect();
+            log::info!("[search_file_handle] 匹配进程数: {}", filtered.len());
+            filtered
         }
         Err(e) => {
             log::error!("[search_file_handle] 执行PowerShell命令失败: {}", e);
@@ -1857,26 +1856,15 @@ pub async fn search_directory_handle(args: SearchDirectoryArgs) -> Vec<serde_jso
     while normalized.ends_with('\\') {
         normalized.pop();
     }
-    
-    // 转义用于 WMI 字符串：反斜杠加一，单引号双写
-    let escaped_path = normalized.replace('\\', "\\\\").replace("'", "''");
     log::debug!("[search_directory_handle] 规范化后路径: '{}'", normalized);
-    
-    // 目录匹配策略：使用 LIKE '%xxx%' 子串匹配
-    // - 输入 "logs" → 匹配 "D:\xxx\logs\app.exe"、"D:\logs\app.exe"
-    // - 输入 "target" → 匹配 "D:\app\target\release\app.exe"
-    // - 输入完整路径 "D:\dev\app" → 匹配该路径下的所有进程
-    let where_clause = format!(
-        "ExecutablePath LIKE '%{0}%'",
-        escaped_path
+
+    // 安全修复（SEC-01）：不再把用户路径拼接进 PowerShell 脚本。
+    // 脚本仅负责取全量进程列表，路径的子串匹配（大小写不敏感）统一下沉到 Rust 端，
+    // 从根本上消除 `$(...)` 等 PowerShell 命令替换带来的任意命令执行风险。
+    let ps_script = String::from(
+        "$query = \"SELECT ProcessId, Name, ExecutablePath FROM Win32_Process WHERE ExecutablePath IS NOT NULL\"; \
+         Get-CimInstance -Query $query | Select-Object @{N='Id';E={$_.ProcessId}}, @{N='ProcessName';E={$_.Name}}, @{N='Path';E={$_.ExecutablePath}} | ConvertTo-Json -Compress"
     );
-    log::info!("[search_directory_handle] WLIKE 子句: {}", where_clause);
-    
-    let ps_template = String::from(
-        "$query = \"SELECT ProcessId, Name, ExecutablePath FROM Win32_Process WHERE {WHERE}\"; \
-         Get-WmiObject -Query $query | Select-Object @{N='Id';E={$_.ProcessId}}, @{N='ProcessName';E={$_.Name}} | ConvertTo-Json -Compress"
-    );
-    let ps_script = ps_template.replace("{WHERE}", &where_clause);
     log::debug!("[search_directory_handle] PowerShell 脚本: {}", ps_script);
     
     let result = Command::new("powershell")
@@ -1898,8 +1886,21 @@ pub async fn search_directory_handle(args: SearchDirectoryArgs) -> Vec<serde_jso
                 log::info!("[search_directory_handle] 未找到匹配的进程（输入路径: {}）", directory_path);
                 return vec![];
             }
-            
-            parse_powershell_json_output(&stdout, "search_directory_handle")
+
+            // 安全修复（SEC-01）：路径匹配在 Rust 端完成，不依赖脚本内拼接的 WQL/LIKE
+            let results = parse_powershell_json_output(&stdout, "search_directory_handle");
+            let needle = normalized.to_lowercase();
+            let filtered: Vec<serde_json::Value> = results
+                .into_iter()
+                .filter(|item| {
+                    item.get("Path")
+                        .and_then(|v| v.as_str())
+                        .map(|p| p.replace('/', "\\").to_lowercase().contains(&needle))
+                        .unwrap_or(false)
+                })
+                .collect();
+            log::info!("[search_directory_handle] 匹配进程数: {}", filtered.len());
+            filtered
         }
         Err(e) => {
             log::error!("[search_directory_handle] 执行PowerShell命令失败: {}", e);
