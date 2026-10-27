@@ -1,9 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Input, Button, Segmented, message, theme } from 'antd';
-import { Clock, Copy, ArrowRight, ArrowLeft, CircleAlert } from 'lucide-react';
+import { Clock, CalendarClock, Copy, ArrowRight, ArrowLeft, CircleAlert } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const MONO = "'JetBrains Mono', 'Cascadia Code', Monaco, Consolas, monospace";
+
+const pad = (n: number, l = 2) => String(n).padStart(l, '0');
+
+/** 本地时区 ISO 8601，与页面展示的本地时间保持一致 */
+const toLocalISO = (ms: number): string => {
+  const d = new Date(ms);
+  const off = -d.getTimezoneOffset();
+  const sign = off >= 0 ? '+' : '-';
+  const abs = Math.abs(off);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}` +
+    `.${pad(d.getMilliseconds(), 3)}${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+};
 
 export const DateTimeTool: React.FC = () => {
   const [timestamp, setTimestamp] = useState<string>('');
@@ -101,18 +114,42 @@ export const DateTimeTool: React.FC = () => {
     message.success('已获取当前时间');
   };
 
-  const sectionLabel: React.CSSProperties = {
+  const now = new Date(currentTime);
+
+  const copyRows = [
+    { label: '时间戳 (ms)', value: currentTime.toString() },
+    { label: '时间戳 (s)', value: Math.floor(currentTime / 1000).toString() },
+    { label: 'ISO 8601', value: toLocalISO(currentTime) },
+  ];
+
+  const cardStyle: React.CSSProperties = {
+    background: token.colorBgElevated,
+    border: `1px solid ${token.colorBorderSecondary}`,
+    borderRadius: 12,
+    padding: 20,
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 14,
+  };
+
+  const iconBadgeStyle: React.CSSProperties = {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    background: token.colorPrimaryBg,
+    color: token.colorPrimary,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  };
+
+  const fieldLabel: React.CSSProperties = {
     fontSize: 12,
     fontWeight: 500,
     color: token.colorTextTertiary,
     letterSpacing: '0.02em',
-  };
-
-  const fieldLabel: React.CSSProperties = {
-    display: 'block',
-    marginBottom: 6,
-    fontSize: 12,
-    color: token.colorTextSecondary,
   };
 
   const errorRow: React.CSSProperties = {
@@ -124,41 +161,71 @@ export const DateTimeTool: React.FC = () => {
     color: token.colorError,
   };
 
-  const cardStyle: React.CSSProperties = {
-    background: token.colorBgElevated,
-    border: `1px solid ${token.colorBorderSecondary}`,
-    borderRadius: 10,
-    padding: 20,
-    minWidth: 0,
-  };
-
-  const copyRows = [
-    { label: '时间戳 (ms)', value: currentTime.toString() },
-    { label: '时间戳 (s)', value: Math.floor(currentTime / 1000).toString() },
-    { label: 'ISO 8601', value: new Date(currentTime).toISOString() },
-  ];
-
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16, alignItems: 'start' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16, alignItems: 'stretch', minHeight: '100%' }}>
       <style>{`
+@keyframes dt-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
 .dt-row { transition: background 0.15s ease; }
 .dt-row:hover { background: ${token.colorBgLayout}; }
+.dt-row:hover .dt-copy { opacity: 1; }
+.dt-copy { opacity: 0.45; transition: opacity 0.15s ease; }
 `}</style>
 
-      <div style={{ ...cardStyle, borderLeft: `3px solid ${token.colorPrimary}` }}>
-        <div style={sectionLabel}>当前时间</div>
-        <div style={{
-          margin: '8px 0 16px',
-          fontFamily: MONO,
-          fontSize: 30,
-          letterSpacing: '-0.02em',
-          color: token.colorText,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        }}>
-          {formatDate(new Date(currentTime), false)}
+      <div style={cardStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={iconBadgeStyle}>
+            <Clock size={18} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: token.colorText }}>当前时间</div>
+            <div style={{ fontSize: 12, color: token.colorTextTertiary, marginTop: 1 }}>实时更新 · 本地时区</div>
+          </div>
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '2px 10px',
+            borderRadius: 999,
+            fontSize: 12,
+            background: token.colorSuccessBg,
+            color: token.colorSuccess,
+          }}>
+            <span style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: token.colorSuccess,
+              animation: 'dt-pulse 2s ease-in-out infinite',
+            }} />
+            实时
+          </span>
         </div>
+
+        <div style={{ padding: '4px 0 2px' }}>
+          <div style={{
+            fontFamily: MONO,
+            fontSize: 36,
+            fontWeight: 600,
+            letterSpacing: '-0.02em',
+            fontVariantNumeric: 'tabular-nums',
+            color: token.colorText,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            lineHeight: 1.2,
+          }}>
+            {formatDate(now, false).slice(5)}
+          </div>
+          <div style={{ marginTop: 6, fontSize: 13, color: token.colorTextSecondary }}>
+            {now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
+          </div>
+        </div>
+
+        <div style={{ borderTop: `1px solid ${token.colorBorderSecondary}`, margin: '2px 0' }} />
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {copyRows.map((row) => (
             <div
@@ -167,19 +234,21 @@ export const DateTimeTool: React.FC = () => {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
-                padding: '6px 8px',
-                borderRadius: 6,
+                gap: 10,
+                padding: '7px 10px',
+                borderRadius: 8,
               }}
             >
-              <span style={{ fontSize: 12, color: token.colorTextTertiary, width: 96, flexShrink: 0 }}>
+              <span style={{ fontSize: 12, color: token.colorTextTertiary, flexShrink: 0 }}>
                 {row.label}
               </span>
               <span style={{
                 flex: 1,
                 minWidth: 0,
+                textAlign: 'right',
                 fontFamily: MONO,
-                fontSize: 12,
+                fontSize: 13,
+                fontVariantNumeric: 'tabular-nums',
                 color: token.colorText,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -188,6 +257,7 @@ export const DateTimeTool: React.FC = () => {
                 {row.value}
               </span>
               <Button
+                className="dt-copy"
                 type="text"
                 size="small"
                 icon={<Copy size={13} />}
@@ -200,8 +270,14 @@ export const DateTimeTool: React.FC = () => {
       </div>
 
       <div style={cardStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 16 }}>
-          <span style={sectionLabel}>转换</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={iconBadgeStyle}>
+            <CalendarClock size={18} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: token.colorText }}>时间戳转换</div>
+            <div style={{ fontSize: 12, color: token.colorTextTertiary, marginTop: 1 }}>双向转换 · 毫秒 / 秒</div>
+          </div>
           <Segmented
             size="small"
             value={timestampUnit}
@@ -213,12 +289,13 @@ export const DateTimeTool: React.FC = () => {
           />
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <span style={fieldLabel}>时间戳</span>
+        <div>
+          <span style={{ ...fieldLabel, display: 'block', marginBottom: 6 }}>时间戳</span>
           <Input
             value={timestamp}
             onChange={(e) => { setTimestamp(e.target.value); setTsError(''); }}
             placeholder="请输入时间戳"
+            status={tsError ? 'error' : undefined}
             style={{ fontFamily: MONO, fontSize: 13 }}
             suffix={
               <Button
@@ -226,6 +303,7 @@ export const DateTimeTool: React.FC = () => {
                 size="small"
                 icon={<Clock size={13} />}
                 onClick={useCurrentTime}
+                title="填入当前时间"
                 style={{ padding: '0 4px', height: 18 }}
               />
             }
@@ -238,21 +316,34 @@ export const DateTimeTool: React.FC = () => {
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-          <motion.div whileTap={{ scale: 0.97 }} style={{ display: 'inline-flex' }}>
-            <Button type="primary" icon={<ArrowRight size={14} />} iconPosition="end" onClick={timestampToDate}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <motion.div whileTap={{ scale: 0.97 }} style={{ display: 'inline-flex', flex: 1, minWidth: 140 }}>
+            <Button
+              type="primary"
+              block
+              icon={<ArrowRight size={14} />}
+              iconPosition="end"
+              onClick={timestampToDate}
+            >
               时间戳 → 日期
             </Button>
           </motion.div>
-          <Button icon={<ArrowLeft size={14} />} onClick={dateToTimestamp}>
-            日期 → 时间戳
-          </Button>
+          <motion.div whileTap={{ scale: 0.97 }} style={{ display: 'inline-flex', flex: 1, minWidth: 140 }}>
+            <Button
+              block
+              icon={<ArrowLeft size={14} />}
+              onClick={dateToTimestamp}
+            >
+              日期 → 时间戳
+            </Button>
+          </motion.div>
         </div>
 
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <span style={fieldLabel}>日期</span>
             <Button
+              className="dt-copy"
               type="text"
               size="small"
               icon={<Copy size={13} />}
@@ -265,6 +356,7 @@ export const DateTimeTool: React.FC = () => {
             value={dateString}
             onChange={(e) => { setDateString(e.target.value); setDateError(''); }}
             placeholder="2024/01/01 12:00:00.000"
+            status={dateError ? 'error' : undefined}
             style={{ fontFamily: MONO, fontSize: 13 }}
           />
           {dateError && (
@@ -273,6 +365,17 @@ export const DateTimeTool: React.FC = () => {
               <span>{dateError}</span>
             </div>
           )}
+        </div>
+
+        <div style={{
+          marginTop: 'auto',
+          paddingTop: 10,
+          borderTop: `1px dashed ${token.colorBorderSecondary}`,
+          fontSize: 12,
+          color: token.colorTextTertiary,
+          lineHeight: 1.6,
+        }}>
+          支持毫秒 / 秒级时间戳；日期支持「2024/01/01 12:00:00.000」格式，含毫秒可自动解析
         </div>
       </div>
     </div>
