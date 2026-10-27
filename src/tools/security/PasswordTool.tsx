@@ -29,7 +29,74 @@ import {
   Check,
   KeyRound,
   LayoutGrid,
+  Lock,
+  Globe,
+  Mail,
+  CreditCard,
+  Landmark,
+  Briefcase,
+  Smartphone,
+  Laptop,
+  Monitor,
+  Gamepad2,
+  AudioLines,
+  Palette,
+  Clapperboard,
+  Camera,
+  BookOpen,
+  FileText,
+  Star,
+  Flame,
+  Heart,
+  Coffee,
+  Plane,
+  Cloud,
+  Wifi,
+  Database,
+  Server,
+  Terminal,
+  Code,
+  GitBranch,
+  MessageCircle,
+  ShoppingCart,
+  Shield,
+  LockOpen,
+  KeySquare,
+  Vault,
+  GlobeLock,
+  Link,
+  Send,
+  AtSign,
+  Wallet,
+  PiggyBank,
+  Banknote,
+  Coins,
+  Receipt,
+  Calculator,
+  Folder,
+  FolderOpen,
+  Archive,
+  Calendar,
+  ClipboardList,
+  Presentation,
+  Tv,
+  Printer,
+  HardDrive,
+  Battery,
+  Bot,
+  Cpu,
+  Container,
+  House,
+  Car,
+  Bike,
+  MapPin,
+  UtensilsCrossed,
+  Film,
+  Headphones,
+  Trophy,
+  Rss,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import {
   DndContext,
@@ -59,12 +126,50 @@ import {
 const { Text } = Typography;
 const { Option } = Select;
 
-const DEFAULT_PASSWORD_ICONS = [
-  '🔑', '🔐', '🛡️', '💼', '📧', '🌐', '💳', '🏦',
-  '📱', '💻', '🎮', '📺', '🎵', '🎨', '🎬', '📊',
-  '📈', '📉', '📖', '📝', '✨', '🌟', '⭐', '🔥',
-  '😊', '😍', '🤩', '😎', '🦁', '🐱', '🐶', '🐰',
-];
+/** Lucide 默认图标集（名称 → 组件），存储值为 `lucide:<名称>` */
+const LUCIDE_ICON_BY_NAME: Record<string, LucideIcon> = {
+  // 安全/账户
+  KeyRound, ShieldCheck, Shield, Lock, LockOpen, KeySquare, Vault,
+  // 网站/社交
+  Globe, GlobeLock, Link, Mail, Send, MessageCircle, AtSign, Rss,
+  // 金融/支付
+  CreditCard, Landmark, Wallet, PiggyBank, Banknote, Coins, Receipt, Calculator,
+  // 工作/办公
+  Briefcase, Folder, FolderOpen, Archive, Calendar, ClipboardList, Presentation,
+  // 设备/硬件
+  Smartphone, Laptop, Monitor, Tv, Printer, HardDrive, Battery,
+  // 开发/服务器
+  Terminal, Code, GitBranch, Database, Server, Cloud, Wifi, Bot, Cpu, Container,
+  // 生活
+  House, Car, Bike, Plane, MapPin, Coffee, UtensilsCrossed, ShoppingCart,
+  // 娱乐/文化
+  Gamepad2, AudioLines, Film, Camera, Headphones, Palette, Clapperboard, Trophy,
+  BookOpen, FileText, Star, Flame, Heart,
+};
+const DEFAULT_PASSWORD_ICONS = Object.entries(LUCIDE_ICON_BY_NAME);
+
+const DEFAULT_ICON_VALUE = 'lucide:KeyRound';
+
+/** 统一渲染条目图标：自定义图片 > Lucide 图标 > 兼容旧版 emoji 数据 */
+const renderEntryIcon = (
+  item: Pick<PasswordItem, 'icon' | 'iconData'>,
+  boxSize: number,
+): React.ReactNode => {
+  if (item.iconData && item.iconData.length > 0) {
+    return (
+      <img
+        src={item.iconData}
+        alt="icon"
+        style={{ maxWidth: boxSize, maxHeight: boxSize, objectFit: 'contain' }}
+      />
+    );
+  }
+  if (item.icon.startsWith('lucide:')) {
+    const Cmp = LUCIDE_ICON_BY_NAME[item.icon.slice(7)];
+    if (Cmp) return <Cmp size={Math.round(boxSize * 0.5)} />;
+  }
+  return <span style={{ fontSize: Math.round(boxSize * 0.55), lineHeight: 1 }}>{item.icon}</span>;
+};
 
 const commonSymbols = ['!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '_', '=', '+', '[', ']', '{', '}', '|', ';', ':', ',', '.', '<', '>', '?'];
 const safeSymbols = ['-', '_', '.', ',', '@'];
@@ -72,7 +177,7 @@ const safeSymbols = ['-', '_', '.', ',', '@'];
 const mapPasswordEntryToItem = (entry: any, index: number): PasswordItem => ({
   id: entry.id,
   name: entry.name || '未命名',
-  icon: '🔑',
+  icon: DEFAULT_ICON_VALUE,
   group: entry.groupId || 'default',
   iconData: undefined,
   description: entry.notes || undefined,
@@ -107,7 +212,7 @@ export const PasswordTool: React.FC = () => {
   const [newItem, setNewItem] = useState<PasswordItem>({
     id: '',
     name: '',
-    icon: '🔑',
+    icon: DEFAULT_ICON_VALUE,
     group: 'default',
     iconData: undefined,
     description: undefined,
@@ -279,7 +384,7 @@ export const PasswordTool: React.FC = () => {
     setNewItem({
       id: Date.now().toString(),
       name: '',
-      icon: '🔑',
+      icon: DEFAULT_ICON_VALUE,
       group: targetGroup,
       iconData: undefined,
       description: undefined,
@@ -523,18 +628,23 @@ export const PasswordTool: React.FC = () => {
   ), [showPassword, togglePasswordVisibility, handleCopyPassword, token]);
 
   const renderPasswordIcon = useCallback((item: PasswordItem) => {
-    return item.iconData && item.iconData.length > 0 ? (
-      <img
-        src={item.iconData}
-        alt="icon"
+    const boxSize = viewMode === 'grid' ? 52 : 36;
+    return (
+      <div
         style={{
-          maxWidth: viewMode === 'grid' ? 48 : 32,
-          maxHeight: viewMode === 'grid' ? 48 : 32,
-          objectFit: 'contain',
+          width: boxSize,
+          height: boxSize,
+          borderRadius: 10,
+          background: 'rgb(99 102 241 / 0.1)',
+          color: '#6366f1',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
         }}
-      />
-    ) : (
-      <span style={{ fontSize: viewMode === 'grid' ? 48 : 32 }}>{item.icon}</span>
+      >
+        {renderEntryIcon(item, boxSize)}
+      </div>
     );
   }, [viewMode]);
 
@@ -783,12 +893,20 @@ export const PasswordTool: React.FC = () => {
                     return (
                       <Card size="small" style={{ borderRadius: 12 }}>
                         <div style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: 32 }}>
-                            {item.iconData ? (
-                              <img src={item.iconData} alt="icon" style={{ maxWidth: 32, maxHeight: 32 }} />
-                            ) : (
-                              item.icon
-                            )}
+                          <div
+                            style={{
+                              width: 40,
+                              height: 40,
+                              margin: '0 auto',
+                              borderRadius: 10,
+                              background: 'rgb(99 102 241 / 0.1)',
+                              color: '#6366f1',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            {renderEntryIcon(item, 40)}
                           </div>
                           <Text>{item.name}</Text>
                         </div>
@@ -884,26 +1002,30 @@ export const PasswordTool: React.FC = () => {
                   maxHeight: 180,
                   overflowY: 'auto',
                 }}>
-                  {DEFAULT_PASSWORD_ICONS.map((icon) => (
-                    <div
-                      key={icon}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 24,
-                        padding: 8,
-                        borderRadius: 8,
-                        cursor: 'pointer',
-                        backgroundColor: newItem.icon === icon ? token.colorPrimaryBg : 'transparent',
-                        border: newItem.icon === icon ? `2px solid ${token.colorPrimary}` : '2px solid transparent',
-                        transition: 'all 0.2s',
-                      }}
-                      onClick={() => setNewItem(prev => ({ ...prev, icon }))}
-                    >
-                      {icon}
-                    </div>
-                  ))}
+                  {DEFAULT_PASSWORD_ICONS.map(([name, Cmp]) => {
+                    const value = `lucide:${name}`;
+                    const selected = newItem.icon === value;
+                    return (
+                      <div
+                        key={name}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: 8,
+                          borderRadius: 8,
+                          cursor: 'pointer',
+                          color: selected ? token.colorPrimary : token.colorTextSecondary,
+                          backgroundColor: selected ? token.colorPrimaryBg : 'transparent',
+                          border: selected ? `2px solid ${token.colorPrimary}` : '2px solid transparent',
+                          transition: 'all 0.2s',
+                        }}
+                        onClick={() => setNewItem(prev => ({ ...prev, icon: value }))}
+                      >
+                        <Cmp size={20} />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               <div>
@@ -1010,26 +1132,30 @@ export const PasswordTool: React.FC = () => {
                     maxHeight: 180,
                     overflowY: 'auto',
                   }}>
-                    {DEFAULT_PASSWORD_ICONS.map((icon) => (
-                      <div
-                        key={icon}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 24,
-                          padding: 8,
-                          borderRadius: 8,
-                          cursor: 'pointer',
-                          backgroundColor: editingItem.icon === icon ? token.colorPrimaryBg : 'transparent',
-                          border: editingItem.icon === icon ? `2px solid ${token.colorPrimary}` : '2px solid transparent',
-                          transition: 'all 0.2s',
-                        }}
-                        onClick={() => setEditingItem(prev => prev ? ({ ...prev, icon }) : null)}
-                      >
-                        {icon}
-                      </div>
-                    ))}
+                    {DEFAULT_PASSWORD_ICONS.map(([name, Cmp]) => {
+                      const value = `lucide:${name}`;
+                      const selected = editingItem.icon === value;
+                      return (
+                        <div
+                          key={name}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 8,
+                            borderRadius: 8,
+                            cursor: 'pointer',
+                            color: selected ? token.colorPrimary : token.colorTextSecondary,
+                            backgroundColor: selected ? token.colorPrimaryBg : 'transparent',
+                            border: selected ? `2px solid ${token.colorPrimary}` : '2px solid transparent',
+                            transition: 'all 0.2s',
+                          }}
+                          onClick={() => setEditingItem(prev => prev ? ({ ...prev, icon: value }) : null)}
+                        >
+                          <Cmp size={20} />
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
                 <div>
