@@ -1,6 +1,6 @@
 # 工具箱 (Toolbox)
 
-一个现代化的通用工具集合桌面应用程序，基于 Tauri 2.x + React + TypeScript 构建，相比 Electron 版本具有更小的体积和更低的内存占用。
+一个现代化的通用工具集合桌面应用程序，基于 Tauri 2.x + React + TypeScript 构建，相比 Electron 版本具有更小的体积和更低的内存占用。界面采用极简设计语言，支持明暗双主题，全局统一 Lucide 矢量图标与 Framer Motion 微动效。
 
 ![License](https://img.shields.io/badge/license-CC%20BY--NC%204.0-yellow.svg)
 ![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8D8?style=flat-square&logo=tauri)
@@ -13,15 +13,15 @@
 - **欢迎页面** - 应用介绍与快速入口
 
 ### 文本处理
-- **代码格式化** - JSON/XML 代码格式化与压缩，支持移除 # 和 // 注释
-- **Markdown 预览** - Markdown 实时预览与编辑
-- **正则表达式测试** - 正则表达式测试工具，支持实时匹配高亮
+- **代码格式化** - JSON/XML 格式化与压缩，可拖拽调整输入/输出分栏比例，支持行号与错误行列定位、Unicode 解码/单引号转双引号/去转义/移除注释选项、`Ctrl+Enter` 快捷键
+- **Markdown 预览** - 分栏/仅编辑/仅预览三态视图，编辑与预览双向滚动同步，代码块语法高亮，支持复制 Markdown/HTML 与载入示例
+- **正则表达式测试** - 测试/常用预设/语法参考三页签，实时匹配高亮与匹配详情（含分组），支持标志位切换、一键复制全部匹配
 
 ### 编码转换
-- **编码解码** - Base64/URL/Hex/Unicode 编码解码
+- **编码解码** - Base64/URL/Hex/Unicode 编码解码，支持结果互换、独立复制与 `Ctrl+Enter` 快捷键
 
 ### 时间日期
-- **时间日期转换** - 时间戳与日期格式相互转换
+- **时间日期转换** - 秒级实时时钟与一键复制时间戳（ms/s）/本地 ISO 8601，时间戳与日期双向转换，支持毫秒/秒单位切换与错误行内提示
 
 ### 文件搜索
 - **文件搜索** - 本地文件快速搜索工具，目录级内存索引加速，支持模糊匹配、布尔逻辑与查询标记（`!` 排除、`^` 前缀、`$` 后缀、`'` 精确、`*`/`?` 通配符、`:@分类`、`:S-` 排序、盘符限定等），结果表格支持按名称/类型/大小点击排序
@@ -53,6 +53,10 @@
 - **类型系统**: TypeScript 5.6
 - **桌面框架**: Tauri 2.x（基于 Rust）
 - **UI 组件库**: Ant Design 6.4
+- **图标库**: Lucide React
+- **动效**: Framer Motion 11
+- **代码高亮**: highlight.js 11
+- **Markdown 渲染**: markdown-it 14 + DOMPurify
 - **拖拽排序**: @dnd-kit 6.3
 - **构建工具**: Vite 8
 
